@@ -1,0 +1,11 @@
+{
+  "name": "grabber.io",
+  "version": "1.0.0",
+  "description": "Video downloader extension",
+  "scripts": {
+    "watch": "tailwindcss -i ./src/input.css -o ./css/tailwind.min.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.1"
+  }
+} 

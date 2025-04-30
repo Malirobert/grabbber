@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            width: 300px;
+            min-height: 400px;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: white;
+            padding: 16px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+        }
+
+        .title {
+            color: #3B82F6;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .pro-badge {
+            background: #f0f0f0;
+            color: #666;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 14px;
+        }
+
+        .grabber-icon {
+            width: 80px;
+            height: 80px;
+            margin: 20px auto;
+            display: block;
+        }
+
+        .ai-button {
+            background: #3B82F6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            width: 100%;
+            text-align: center;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 20px 0;
+        }
+
+        .quota-text {
+            font-size: 20px;
+            font-weight: 500;
+        }
+
+        .upgrade-text {
+            font-size: 16px;
+            color: #FF69B4;
+        }
+
+        .history-text {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .crown-icon {
+            color: #FF69B4 !important;
+        }
+
+        .history-section {
+            margin-top: 30px;
+        }
+
+        .history-title {
+            display: flex;
+            align-items: center;
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .history-icon {
+            margin-right: 8px;
+        }
+
+        .history-box {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .history-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-item img {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+            object-fit: cover;
+        }
+
+        .history-item-info {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .history-item-title {
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .history-item-date {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .mode-toggle {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 15px;
+            background: white;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: center;
+        }
+
+        .toggle-btn {
+            background: #3B82F6;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 25px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s;
+        }
+
+        .toggle-btn:hover {
+            background: #2563EB;
+        }
+
+        .toggle-btn i {
+            font-size: 18px;
+        }
+
+        /* Scrollbar style */
+        .history-box::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .history-box::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        .history-box::-webkit-scrollbar-thumb {
+            background: #3B82F6;
+            border-radius: 3px;
+        }
+
+        .switch-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+            gap: 20px;
+        }
+
+        .mode-label {
+            font-size: 15px;
+            font-weight: 500;
+            color: #666;
+        }
+
+        .switch {
+            position: relative;
+            width: 60px;
+            height: 30px;
+            margin: 0 10px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #3B82F6;
+            border-radius: 34px;
+            transition: .4s;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 24px;
+            width: 24px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            border-radius: 50%;
+            transition: .4s;
+        }
+
+        input:checked + .slider {
+            background-color: #3B82F6;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(30px);
+        }
+
+        .icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .text-with-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        .text-with-icon i {
+            font-size: 16px;
+            color: #3B82F6;
+        }
+
+        .version-container {
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background-color 0.3s;
+        }
+
+        .user-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+        }
+
+        .profile-icon {
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background-color 0.3s;
+        }
+
+        .profile-icon:hover {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .profile-icon svg {
+            color: #3B82F6;
+        }
+
+        .auth-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .auth-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            width: 280px;
+        }
+
+        .auth-title {
+            color: #3B82F6;
+            font-size: 24px;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .auth-form input {
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .create-account-btn {
+            background: #3B82F6;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .create-account-btn:hover {
+            background: #2563EB;
+        }
+
+        .auth-divider {
+            text-align: center;
+            margin: 16px 0;
+            position: relative;
+        }
+
+        .auth-divider::before,
+        .auth-divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 45%;
+            height: 1px;
+            background: #ddd;
+        }
+
+        .auth-divider::before { left: 0; }
+        .auth-divider::after { right: 0; }
+
+        .auth-divider span {
+            background: white;
+            padding: 0 10px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .google-btn {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .google-btn img {
+            width: 18px;
+            height: 18px;
+        }
+
+        .close-modal {
+            position: absolute;
+            right: 15px;
+            top: 15px;
+            font-size: 20px;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .delete-btn {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            width: 100%;
+            margin-top: 20px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .profile-info {
+            padding: 20px 0;
+        }
+
+        .profile-info p {
+            margin: 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .google-btn i {
+            font-size: 18px;
+            margin-right: 8px;
+        }
+
+        .disabled-button {
+            opacity: 0.5;
+            cursor: not-allowed !important;
+        }
+        
+        @keyframes slideUp {
+            from { transform: translate(-50%, 100%); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
+        
+        @keyframes slideDown {
+            from { transform: translate(-50%, 0); opacity: 1; }
+            to { transform: translate(-50%, 100%); opacity: 0; }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Firebase local files -->
+    <script src="/lib/firebase-app.js"></script>
+    <script src="/lib/firebase-auth.js"></script>
+   
+<body>
+    <div class="header">
+        <div class="title">Grabbber</div>
+        <div class="profile-icon" id="profileBtn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+        </div>
+    </div>
+    
+    <div class="switch-container">
+        <span class="switch-label">Grabbber</span>
+        <label class="switch">
+            <input type="checkbox" id="modeToggle">
+            <span class="slider">
+                <span class="slider-ball"></span>
+            </span>
+        </label>
+        <span class="switch-label">AI agents</span>
+    </div>
+
+    <div class="text-with-icon quota-text">
+        <i class="fas fa-chart-pie"></i>
+        Free quota: 0/10 per day.
+    </div>
+
+    <div class="footer-buttons">
+        <!-- Removed upgrade and billing buttons -->
+    </div>
+
+    <div class="text-with-icon history-text">
+        <i class="fas fa-history"></i>
+        Videos History
+    </div>
+
+    <div class="history-box" id="historyBox">
+        <!-- L'historique sera ajouté dynamiquement -->
+    </div>
+
+    <!-- Version container avec logo utilisateur -->
+    
+
+    <!-- Modal de connexion -->
+    <div id="authModal" class="auth-modal">
+        <div class="auth-content">
+            <div class="auth-header">
+                <h1 class="auth-title">Grabbber</h1>
+                <span class="close-modal">&times;</span>
+            </div>
+            
+            <form id="emailAuthForm" class="auth-form">
+                <input type="email" placeholder="Email" required>
+                <input type="password" placeholder="Password" required>
+                <button type="submit" class="create-account-btn">
+                    Create Account
+                </button>
+            </form>
+
+            <div class="auth-divider">
+                <span>or</span>
+            </div>
+
+            <button id="googleAuthBtn" class="google-btn">
+                <i class="fab fa-google" style="color: #4285f4;"></i>
+                Sign up with Google
+            </button>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html> 
