@@ -5,7 +5,8 @@
   "description": "Download videos from various platforms",
   "permissions": [
     "storage",
-    "tabs"
+    "tabs",
+    "http://localhost:5000/*"
   ],
   "host_permissions": [
     
@@ -42,4 +43,4 @@
     },
     "default_popup": "popup.html"
   }
-} 
+}

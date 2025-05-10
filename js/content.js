@@ -4,6 +4,8 @@ let isSelectionMode = false;
 let wasSelectionModeActive = false;
 let currentSite = '';
 let isUserAuthenticated = false;
+let downloadStates = {};
+let downloadInProgress = false;  // Nouvelle variable pour suivre l'état global du téléchargement
 
 // Déterminer le site actuel
 function detectCurrentSite() {
@@ -160,61 +162,58 @@ const styles = `
     }
     .video-item {
         display: flex;
-        padding: 12px 8px;
+        padding: 8px;
         gap: 8px;
-        align-items: center;
+        align-items: flex-start;
         border-bottom: 1px solid #eee;
-        width: 100%;
-        box-sizing: border-box;
     }
+
     .video-thumbnail {
         width: 80px;
         height: 45px;
         border-radius: 4px;
         object-fit: cover;
+        flex-shrink: 0;
     }
-    /* Ajustement spécial pour les vignettes Instagram */
-    .video-item[data-platform="instagram"] .video-thumbnail {
-        width: 45px;
-        height: 80px;
-        object-fit: cover;
-    }
+
     .video-info {
         flex: 1;
         min-width: 0;
-        max-width: 170px;
-        padding-right: 5px;
+        display: flex;
+        flex-direction: column;
+        padding: 4px 0;
     }
+
     .video-title {
         font-size: 13px;
-        margin-bottom: 4px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         max-width: 160px;
-        line-height: 1.2;
+        margin-bottom: 4px;
     }
+
     .video-status {
         color: #666;
-        font-size: 12px;
+        font-size: 11px;
+        white-space: nowrap;
     }
-    .action-buttons {
-        display: flex;
-        gap: 8px;
-    }
+
     .delete-button {
         color: #ef4444;
-        font-size: 20px;
+        font-size: 18px;
         font-weight: bold;
         background: none;
         border: none;
         cursor: pointer;
-        padding: 0 5px;
-        margin-left: auto;
-        min-width: 24px;
-    }
-    .delete-button:hover {
-        color: #dc2626;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 24px;
+        height: 24px;
+        margin-top: 2px;
     }
     .download-all-button {
         background: #22c55e;
@@ -258,19 +257,27 @@ const styles = `
         position: fixed;
         bottom: 20px;
         right: 20px;
-        background: #22c55e;
+        background: rgb(34, 197, 94);
         color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        max-width: 160px;
+        text-align: center;
         z-index: 10000;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        opacity: 0.9;
         animation: slideIn 0.3s ease, fadeOut 0.3s ease 2s forwards;
+    }
+    .notification.error {
+        background: rgb(220, 38, 38);
     }
     @keyframes slideIn {
         from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(0); opacity: 0.9; }
     }
     @keyframes fadeOut {
-        from { opacity: 1; }
+        from { opacity: 0.9; }
         to { opacity: 0; }
     }
     #video-list {
@@ -1011,13 +1018,20 @@ function showDownloadPanel(e) {
     const grabberButton = document.getElementById('grabber-button');
     wasSelectionModeActive = isSelectionMode;
 
-    // Always ensure the grabber button is visible before getting its position
+    // Restaurer l'état de téléchargement
+    const savedDownloadInProgress = localStorage.getItem('downloadInProgress');
+    if (savedDownloadInProgress) {
+        downloadInProgress = savedDownloadInProgress === 'true';
+    }
+    const savedStates = localStorage.getItem('downloadStates');
+    if (savedStates) {
+        downloadStates = JSON.parse(savedStates);
+    }
+
     grabberButton.style.display = 'flex';
-    void grabberButton.offsetWidth; // Force reflow
+    void grabberButton.offsetWidth;
 
     const rect = grabberButton.getBoundingClientRect();
-    console.log('Grabber position:', rect.top, rect.left);
-
     downloadPanel.style.position = 'fixed';
     downloadPanel.style.top = `${rect.top}px`;
     downloadPanel.style.left = `${rect.left}px`;
@@ -1025,84 +1039,81 @@ function showDownloadPanel(e) {
     downloadPanel.style.bottom = '';
     downloadPanel.style.display = 'block';
     grabberButton.style.display = 'none';
+
     updateDownloadPanel();
 }
 
-// Fonction pour mettre à jour le panneau de téléchargement - standardisation en anglais
+// Modifier la fonction updateDownloadPanel pour utiliser downloadInProgress
 function updateDownloadPanel() {
     const downloadPanel = document.getElementById('download-panel');
+    
     downloadPanel.innerHTML = `
-        <div id="banner-ad-top" style="display: flex; justify-content: center; margin: 8px 0;"></div>
         <div class="panel-header">
             Selected Videos (${selectedVideos.length})
             <button id="minimize-panel">---</button>
         </div>
         <div id="video-list">
             ${selectedVideos.map(video => {
-                const siteConfig = platformSelectors[video.platform];
-                let thumbnailUrl = '';
+                const downloadState = downloadStates[video.id] || 'ready';
+                const statusText = {
+                    'ready': 'Ready to download',
+                    'downloading': 'Downloading...',
+                    'completed': 'Downloaded',
+                    'error': 'Download failed'
+                }[downloadState];
                 
-                // Gestion spéciale des thumbnails pour Instagram
-                if (video.platform === 'instagram') {
-                    // Utiliser l'image de la vidéo/reel
-                    thumbnailUrl = video.thumbnail || '';
-                    if (!thumbnailUrl) {
-                        // Chercher l'image dans le DOM si pas déjà stockée
-                        const videoElement = document.querySelector(`a[href*="${video.id}"]`);
-                        if (videoElement) {
-                            const img = videoElement.querySelector('img._aagt, img[sizes="1px"]');
-                            thumbnailUrl = img ? img.src : '';
-                        }
+                const statusClass = {
+                    'ready': '',
+                    'downloading': 'text-blue-500',
+                    'completed': 'text-green-500',
+                    'error': 'text-red-500'
+                }[downloadState];
+
+                const siteConfig = platformSelectors[video.platform];
+                let thumbnailUrl = video.thumbnail || '';
+                
+                if (video.platform === 'instagram' && !thumbnailUrl) {
+                    const videoElement = document.querySelector(`a[href*="${video.id}"]`);
+                    if (videoElement) {
+                        const img = videoElement.querySelector('img._aagt, img[sizes="1px"]');
+                        thumbnailUrl = img ? img.src : '';
                     }
-                } else {
-                    thumbnailUrl = video.thumbnail || '';
                 }
                 
-                const status = 'Ready to download';
-                
                 return `
-                <div class="video-item" data-video-id="${video.id}" data-platform="${video.platform}">
+                <div class="video-item">
                     <img src="${thumbnailUrl}" class="video-thumbnail" 
                          style="${video.platform === 'instagram' ? 'width: 45px; height: 80px; object-fit: cover;' : ''}"
-                         onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"80\" height=\"45\" viewBox=\"0 0 80 45\"><rect width=\"80\" height=\"45\" fill=\"%23eee\"/><text x=\"40\" y=\"22.5\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-family=\"sans-serif\" font-size=\"12\" fill=\"%23999\">${video.platform}</text></svg>'">
+                         onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\\"http://www.w3.org/2000/svg\\\" width=\\\"80\\\" height=\\\"45\\\" viewBox=\\\"0 0 80 45\\\"><rect width=\\\"80\\\" height=\\\"45\\\" fill=\\\"%23eee\\\"/><text x=\\\"40\\\" y=\\\"22.5\\\" text-anchor=\\\"middle\\\" dominant-baseline=\\\"middle\\\" font-family=\\\"sans-serif\\\" font-size=\\\"12\\\" fill=\\\"%23999\\\">${video.platform}</text></svg>'">
                     <div class="video-info">
-                        <div class="video-title" title="${video.title}">
-                            ${video.title}
-                        </div>
-                        <div class="video-status">
-                            ${status} (${video.platform})
-                        </div>
+                        <div class="video-title" title="${video.title}">${video.title}</div>
+                        <div class="video-status ${statusClass}">${statusText} (${video.platform})</div>
                     </div>
                     <button class="delete-button" data-video-id="${video.id}" data-platform="${video.platform}">×</button>
-                </div>
-                `;
+                </div>`;
             }).join('')}
         </div>
-        <div id="banner-ad-bottom" style="display: flex; justify-content: center; margin: 8px 0;"></div>
         ${selectedVideos.length > 0 ? `
-            <button id="download-all" class="download-all-button">
-                <i class="fas fa-download"></i> Download All
+            <button id="download-all" class="download-all-button${downloadInProgress ? ' downloading' : ''}"${downloadInProgress ? ' disabled' : ''}>
+                ${downloadInProgress ? '<i class="fas fa-spinner fa-spin"></i> Downloading...' : '<i class="fas fa-download"></i> Download All'}
             </button>
         ` : ''}
     `;
 
-    // Inject banner ads
-    injectBannerAd('banner-ad-top');
-    injectBannerAd('banner-ad-bottom');
-
-    // Ajouter les événements pour les boutons de suppression
+    // Add event listeners
     const deleteButtons = downloadPanel.querySelectorAll('.delete-button');
     deleteButtons.forEach(button => {
         button.addEventListener('click', (e) => {
             const videoId = e.target.dataset.videoId;
             const platform = e.target.dataset.platform;
+            delete downloadStates[videoId];
+            saveDownloadStates();
             removeVideo(videoId, platform);
         });
     });
 
-    // Réattacher les autres événements
     document.getElementById('minimize-panel').addEventListener('click', minimizePanel);
-    if (selectedVideos.length > 0) {
+    if (selectedVideos.length > 0 && !downloadInProgress) {
         document.getElementById('download-all').addEventListener('click', downloadAllVideos);
     }
 }
@@ -1156,6 +1167,7 @@ function addToHistory(videoData) {
 // Modifier la fonction downloadAllVideos
 function downloadAllVideos() {
     if (selectedVideos.length === 0) return;
+    if (downloadInProgress) return;
 
     chrome.storage.local.get(['dailyQuota'], function(result) {
         const currentQuota = result.dailyQuota || 0;
@@ -1166,31 +1178,37 @@ function downloadAllVideos() {
             return;
         }
 
-        // Limiter le nombre de vidéos au quota restant
-        const videosToDownload = selectedVideos.slice(0, remainingQuota);
+        downloadInProgress = true;
+        localStorage.setItem('downloadInProgress', 'true');
 
-    const downloadButton = document.getElementById('download-all');
-    downloadButton.classList.add('downloading');
-    downloadButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
-    
+        const videosToDownload = selectedVideos.slice(0, remainingQuota);
+        const downloadButton = document.getElementById('download-all');
+        downloadButton.classList.add('downloading');
+        downloadButton.disabled = true;
+        downloadButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
+        
+        // Mettre à jour l'état des téléchargements
+        videosToDownload.forEach(video => {
+            downloadStates[video.id] = 'downloading';
+        });
+        saveDownloadStates();
+        updateDownloadPanel();
+        
         let currentIndex = 0;
     
-    function downloadNext() {
+        function downloadNext() {
             if (currentIndex >= videosToDownload.length) {
-            downloadButton.classList.remove('downloading');
-            downloadButton.innerHTML = '<i class="fas fa-check"></i> Downloaded';
-            setTimeout(() => {
-                downloadButton.innerHTML = '<i class="fas fa-download"></i> Download All';
-            }, 2000);
-            setTimeout(() => {
-                window.open('https://pl26520912.profitableratecpm.com/91/a2/66/91a2664aaaa85bd8946283455044f080', '_blank');
-            }, 2000);
-            setTimeout(() => {
-                window.location.href = 'https://www.profitableratecpm.com/ixnn4uw3?key=bce0bac88d6e269e6e22197d6a231d6f';
-            }, 2000);
-            return;
-        }
-        
+                downloadInProgress = false;
+                localStorage.setItem('downloadInProgress', 'false');
+                downloadButton.classList.remove('downloading');
+                downloadButton.disabled = false;
+                downloadButton.innerHTML = '<i class="fas fa-check"></i> Downloaded';
+                setTimeout(() => {
+                    downloadButton.innerHTML = '<i class="fas fa-download"></i> Download All';
+                }, 2000);
+                return;
+            }
+            
             const video = videosToDownload[currentIndex];
             const cleanTitle = sanitizeFilename(video.title);
             
@@ -1230,7 +1248,7 @@ function downloadAllVideos() {
                         quality: 'best',
                         headers: headers,
                         isReel: video.url.includes('/reel/'),
-                        useProxy: true, // Indique au serveur d'utiliser un proxy
+                        useProxy: true,
                         retryCount: 0
                     })
                 })
@@ -1255,6 +1273,10 @@ function downloadAllVideos() {
                         window.URL.revokeObjectURL(url);
                     }, 100);
 
+                    downloadStates[video.id] = 'completed';
+                    saveDownloadStates();
+                    updateDownloadPanel();
+
                     incrementQuota();
                     addToHistory(video);
                     currentIndex++;
@@ -1262,6 +1284,10 @@ function downloadAllVideos() {
                 })
                 .catch(error => {
                     console.error('Download error:', error);
+                    downloadStates[video.id] = 'error';
+                    saveDownloadStates();
+                    updateDownloadPanel();
+                    
                     if (error.message === 'RATE_LIMIT') {
                         showNotification('Rate limit reached. Waiting 30 seconds...');
                         setTimeout(() => {
@@ -1275,16 +1301,16 @@ function downloadAllVideos() {
                     }
                 });
             } else {
-                // Code existant pour les autres plateformes
-        fetch('http://localhost:5000/download', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
+                // Code pour les autres plateformes
+                fetch('http://localhost:5000/download', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
-            },
-            body: JSON.stringify({ 
-                url: video.url,
-                platform: video.platform,
+                    },
+                    body: JSON.stringify({ 
+                        url: video.url,
+                        platform: video.platform,
                         title: cleanTitle,
                         format: 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best',
                         options: {
@@ -1312,43 +1338,51 @@ function downloadAllVideos() {
                                 'Connection': 'keep-alive'
                             }
                         }
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
                         if (response.status === 429) {
                             throw new Error('RATE_LIMIT');
                         }
                         throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.blob();
-        })
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
                     a.style.display = 'none';
-            a.href = url;
+                    a.href = url;
                     a.download = `${cleanTitle}.mp4`;
-            document.body.appendChild(a);
-            a.click();
+                    document.body.appendChild(a);
+                    a.click();
                     
                     setTimeout(() => {
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-                    }, 10000); // Augmenté à 10 secondes
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                    }, 10000);
             
+                    downloadStates[video.id] = 'completed';
+                    saveDownloadStates();
+                    updateDownloadPanel();
+
                     incrementQuota();
                     addToHistory(video);
                     currentIndex++;
                     setTimeout(downloadNext, 2000);
-        })
-        .catch(error => {
-            console.error('Download error:', error);
+                })
+                .catch(error => {
+                    console.error('Download error:', error);
+                    downloadStates[video.id] = 'error';
+                    saveDownloadStates();
+                    updateDownloadPanel();
+                    
                     if (error.message === 'RATE_LIMIT') {
                         showNotification('Rate limit reached. Waiting 30 seconds...');
                         setTimeout(() => {
                             currentIndex--;
-            downloadNext();
+                            downloadNext();
                         }, 30000);
                     } else {
                         showNotification(`Error downloading: ${cleanTitle}. Retrying in 10 seconds...`);
@@ -1359,9 +1393,9 @@ function downloadAllVideos() {
                     }
                 });
             }
-    }
+        }
     
-    downloadNext();
+        downloadNext();
     });
 }
 
@@ -1454,20 +1488,24 @@ function minimizePanel() {
     const downloadPanel = document.getElementById('download-panel');
     const grabberButton = document.getElementById('grabber-button');
     const rect = downloadPanel.getBoundingClientRect();
+    
     grabberButton.style.position = 'fixed';
     grabberButton.style.top = `${rect.top}px`;
     grabberButton.style.left = `${rect.left}px`;
     grabberButton.style.right = '';
     grabberButton.style.bottom = '';
+    
     downloadPanel.style.display = 'none';
     grabberButton.style.display = 'flex';
-    isSelectionMode = wasSelectionModeActive;
-    if (isSelectionMode) {
-        grabberButton.classList.add('active');
-        detectAndHighlightVideos();
-    } else {
-        grabberButton.classList.remove('active');
-    }
+    
+    // Sauvegarder l'état
+    localStorage.setItem('wasMinimized', 'true');
+    localStorage.setItem('downloadInProgress', downloadInProgress.toString());
+    localStorage.setItem('grabberPosition', JSON.stringify({
+        top: rect.top,
+        left: rect.left
+    }));
+    localStorage.setItem('downloadStates', JSON.stringify(downloadStates));
 }
 
 // Injecter l'interface utilisateur
@@ -1575,6 +1613,20 @@ function injectUI() {
         childList: true,
         subtree: true
     });
+
+    loadDownloadStates();  // Charger les états au démarrage
+    
+    // Restore minimized state if needed
+    const wasMinimized = localStorage.getItem('wasMinimized');
+    if (wasMinimized === 'true') {
+        const position = JSON.parse(localStorage.getItem('grabberPosition') || '{}');
+        const grabberButton = document.getElementById('grabber-button');
+        if (position.top && position.left) {
+            grabberButton.style.position = 'fixed';
+            grabberButton.style.top = `${position.top}px`;
+            grabberButton.style.left = `${position.left}px`;
+        }
+    }
 }
 
 // Démarrer l'extension
@@ -1583,9 +1635,24 @@ injectUI();
 // Fonction pour afficher la notification - en anglais
 function showNotification(message, type = 'success') {
     const notification = document.createElement('div');
-    notification.className = 'notification';
-    notification.style.background = type === 'error' ? '#dc2626' : '#22c55e';
+    notification.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: ${type === 'success' ? '#22c55e' : '#dc2626'};
+        color: white;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        max-width: 160px;
+        text-align: center;
+        z-index: 10000;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        opacity: 0.9;
+        animation: slideIn 0.3s ease, fadeOut 0.3s ease 2s forwards;
+    `;
     notification.textContent = message;
+    
     document.body.appendChild(notification);
     
     setTimeout(() => {
@@ -1644,33 +1711,34 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     }
 });
 
-function injectBannerAd(containerId) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    // Remove previous ad if any
-    container.innerHTML = "";
-
-    // Create the script that sets atOptions
-    const scriptOptions = document.createElement('script');
-    scriptOptions.type = 'text/javascript';
-    scriptOptions.text = `
-        atOptions = {
-            'key' : '8d520492c2e492c4d993a8450698c700',
-            'format' : 'iframe',
-            'height' : 90,
-            'width' : 728,
-            'params' : {}
-        };
-    `;
-
-    // Create the script that loads the ad
-    const scriptAd = document.createElement('script');
-    scriptAd.type = 'text/javascript';
-    scriptAd.src = '//www.highperformanceformat.com/8d520492c2e492c4d993a8450698c700/invoke.js';
-
-    // Append both scripts
-    container.appendChild(scriptOptions);
-    container.appendChild(scriptAd);
+// Charger l'état des téléchargements au démarrage
+function loadDownloadStates() {
+    const savedStates = localStorage.getItem('downloadStates');
+    if (savedStates) {
+        downloadStates = JSON.parse(savedStates);
+        updateDownloadPanel();
+    }
 }
+
+// Fonction pour sauvegarder l'état des téléchargements
+function saveDownloadStates() {
+    localStorage.setItem('downloadStates', JSON.stringify(downloadStates));
+}
+
+// Ajouter l'initialisation au démarrage
+document.addEventListener('DOMContentLoaded', () => {
+    loadDownloadStates();
+    
+    // Restore minimized state if needed
+    const wasMinimized = localStorage.getItem('wasMinimized');
+    if (wasMinimized === 'true') {
+        const position = JSON.parse(localStorage.getItem('grabberPosition') || '{}');
+        const grabberButton = document.getElementById('grabber-button');
+        if (position.top && position.left) {
+            grabberButton.style.position = 'fixed';
+            grabberButton.style.top = `${position.top}px`;
+            grabberButton.style.left = `${position.left}px`;
+        }
+    }
+});
 

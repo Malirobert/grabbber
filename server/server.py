@@ -1,17 +1,37 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import yt_dlp
-import os
-from tempfile import TemporaryDirectory
+from pathlib import Path
 import shutil
+from tempfile import TemporaryDirectory
+import re
+import unicodedata
 
 app = Flask(__name__)
 CORS(app)
 
-# Créer un dossier permanent pour les téléchargements
-DOWNLOAD_FOLDER = os.path.join("C:\\", "Videos")  # Dossier Videos à la racine du disque C
-if not os.path.exists(DOWNLOAD_FOLDER):
-    os.makedirs(DOWNLOAD_FOLDER)
+# Utilisation de pathlib pour créer un chemin multiplateforme
+DOWNLOAD_FOLDER = Path.home() / "Videos" / "Downloads"
+DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+
+def sanitize_filename(filename):
+    # Supprimer les emojis et autres caractères spéciaux
+    filename = ''.join(char for char in filename if unicodedata.category(char)[0] != 'So')
+    
+    # Supprimer ou remplacer les caractères non-ASCII
+    filename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore').decode('ASCII')
+    
+    # Remplacer les caractères interdits par des tirets
+    filename = re.sub(r'[<>:"/\\|?*]', '-', filename)
+    
+    # Remplacer les espaces multiples par un seul espace
+    filename = re.sub(r'\s+', ' ', filename)
+    
+    # Limiter la longueur du nom de fichier
+    if len(filename) > 240:  # Windows a une limite de 260 caractères pour le chemin complet
+        filename = filename[:240]
+    
+    return filename.strip()
 
 # Configuration optimisée pour yt-dlp
 ydl_opts = {
@@ -80,8 +100,9 @@ def download_video():
         print(f"\nDémarrage du téléchargement pour : {url}")
         
         with TemporaryDirectory() as temp_path:
+            temp_path = Path(temp_path)
             temp_opts = ydl_opts.copy()
-            temp_opts['outtmpl'] = os.path.join(temp_path, '%(title)s.%(ext)s')
+            temp_opts['outtmpl'] = str(temp_path / '%(title)s.%(ext)s')
 
             with yt_dlp.YoutubeDL(temp_opts) as ydl:
                 try:
@@ -89,19 +110,30 @@ def download_video():
                     info = ydl.extract_info(url, download=True)
                     
                     if info:
-                        temp_video_path = os.path.join(temp_path, f"{info['title']}.{info['ext']}")
-                        final_video_path = os.path.join(DOWNLOAD_FOLDER, f"{info['title']}.{info['ext']}")
+                        # Nettoyer le nom du fichier
+                        clean_title = sanitize_filename(info['title'])
+                        
+                        # Trouver le fichier téléchargé dans le dossier temporaire
+                        temp_files = list(temp_path.glob('*.mp4'))
+                        if not temp_files:
+                            raise Exception("Aucun fichier MP4 trouvé après le téléchargement")
+                        
+                        temp_video_path = temp_files[0]
+                        final_video_path = DOWNLOAD_FOLDER / f"{clean_title}.mp4"
+                        
+                        # S'assurer que le dossier de destination existe
+                        DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
                         
                         # Copier le fichier vers le dossier permanent
-                        shutil.copy2(temp_video_path, final_video_path)
+                        shutil.copy2(str(temp_video_path), str(final_video_path))
                         print(f"Vidéo sauvegardée dans : {final_video_path}")
                         
                         # Envoyer le fichier depuis le dossier permanent
                         return send_file(
-                            final_video_path,
+                            str(final_video_path),
+                            mimetype='video/mp4',
                             as_attachment=True,
-                            download_name=f"{info['title']}.{info['ext']}",
-                            mimetype='video/mp4'
+                            download_name=f"{clean_title}.mp4"
                         )
                     else:
                         print("Erreur : Impossible d'extraire les informations de la vidéo")
@@ -118,4 +150,4 @@ def download_video():
 if __name__ == '__main__':
     print(f"Démarrage du serveur de téléchargement...")
     print(f"Les vidéos seront sauvegardées dans : {DOWNLOAD_FOLDER}")
-    app.run(host='0.0.0.0', port=5000, debug=True) 
+    app.run(host='0.0.0.0', port=5000, debug=True)
