@@ -1,167 +1,149 @@
-from flask import Flask, request, jsonify, send_file 
-from flask_cors import CORS 
-import yt_dlp 
-from pathlib import Path 
-import shutil 
-from tempfile import TemporaryDirectory 
-import re 
-import unicodedata 
-import logging 
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+import yt_dlp
+from pathlib import Path
+import shutil
+from tempfile import TemporaryDirectory
+import re
+import unicodedata
 
-app = Flask(__name__) 
-CORS(app) 
+app = Flask(__name__)
+CORS(app)
 
-# Configuration du logging 
-logging.basicConfig(level=logging.INFO) 
-logger = logging.getLogger(__name__) 
+# Utilisation de pathlib pour créer un chemin multiplateforme
+DOWNLOAD_FOLDER = Path.home() / "Videos" / "Downloads"
+DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
-# Utilisation de pathlib pour créer un chemin multiplateforme 
-DOWNLOAD_FOLDER = Path.home() / "Videos" / "Downloads" 
-DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True) 
+def sanitize_filename(filename):
+    # Supprimer les emojis et autres caractères spéciaux
+    filename = ''.join(char for char in filename if unicodedata.category(char)[0] != 'So')
+    
+    # Supprimer ou remplacer les caractères non-ASCII
+    filename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore').decode('ASCII')
+    
+    # Remplacer les caractères interdits par des tirets
+    filename = re.sub(r'[<>:"/\\|?*]', '-', filename)
+    
+    # Remplacer les espaces multiples par un seul espace
+    filename = re.sub(r'\s+', ' ', filename)
+    
+    # Limiter la longueur du nom de fichier
+    if len(filename) > 240:  # Windows a une limite de 260 caractères pour le chemin complet
+        filename = filename[:240]
+    
+    return filename.strip()
 
-def sanitize_filename(filename): 
-    # Supprimer les emojis et autres caractères spéciaux 
-    filename = ''.join(char for char in filename if unicodedata.category(char)[0] != 'So') 
-    
-    # Supprimer ou remplacer les caractères non-ASCII 
-    filename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore').decode('ASCII') 
-    
-    # Remplacer les caractères interdits par des tirets 
-    filename = re.sub(r'[<>:"/\\|?*]', '-', filename) 
-    
-    # Remplacer les espaces multiples par un seul espace 
-    filename = re.sub(r'\s+', ' ', filename) 
-    
-    # Limiter la longueur du nom de fichier 
-    if len(filename) > 240: 
-        filename = filename[:240] 
-    
-    return filename.strip() 
-
-# Configuration optimisée pour yt-dlp 
-ydl_opts = { 
-    'format': 'bestvideo[vcodec^=avc1][height<=480]+bestaudio/best[vcodec^=avc1]/best',
+# Configuration optimisée pour yt-dlp
+ydl_opts = {
+    'format': 'bestvideo[height<=480]+bestaudio/best[height<=480]',  # Limité à 480p
     'merge_output_format': 'mp4',
+    # Post-processeurs avec la configuration correcte
     'postprocessors': [{
         'key': 'FFmpegVideoConvertor',
-        'preferedformat': 'mp4',
-        'params': [
-            '-vcodec', 'h264',
-            '-acodec', 'aac',
-            '-strict', 'experimental'
-        ]
+        'preferedformat': 'mp4'
     }],
-    'prefer_ffmpeg': True,
-    'extract_flat': True, 
-    'outtmpl': '/tmp/%(title)s.%(ext)s', 
-    'nocheckcertificate': True, 
-    'quiet': False, 
-    'noprogress': False, 
-    'http_headers': { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36', 
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 
-        'Accept-Language': 'en-us,en;q=0.5', 
-        'Sec-Fetch-Mode': 'navigate' 
-    }, 
-    'extractor_args': { 
-        'TikTok': {'format': 'h264'},  # Spécifique à TikTok 
-        'youtube': {'player_client': ['android'], 'formats': 'missing_pot'} 
-    }, 
-    'buffersize': 1048576, 
-    'concurrent_fragments': 10, 
-    'file_access_retries': 5, 
-    'fragment_retries': 5, 
-    'retry_sleep': 5, 
-    'socket_timeout': 300, 
-    'stream': True, 
-    'throttledratelimit': None, 
-    'verbose': True, 
-    'max_filesize': 1024 * 1024 * 1024 
-} 
+    'extract_flat': True,  # Pour extraire les métadonnées sans télécharger
+    'outtmpl': '%(title)s.%(ext)s',
+    'nocheckcertificate': True,
+    'quiet': False,  # Réactiver les logs
+    'noprogress': False,  # Réactiver l'affichage de la progression
+    'http_headers': {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    },
+    'extractor_args': {
+        'TikTok': {
+            'format': 'h264'
+        },
+        'youtube': {
+            'player_client': ['android'],
+            'formats': 'missing_pot'
+        }
+    },
+    # Optimisations de performance
+    'buffersize': 1024 * 1024,  # Buffer augmenté à 1MB
+    'concurrent_fragments': 10,  # Plus de téléchargements simultanés
+    'file_access_retries': 5,   # Plus de tentatives
+    'fragment_retries': 5,      # Plus de tentatives pour les fragments
+    'retry_sleep': 5,           # Temps d'attente entre les tentatives
+    'socket_timeout': 300,      # Timeout augmenté à 300 secondes (5 minutes)
+    'stream': True,             # Activation du streaming direct
+    'throttledratelimit': None, # Suppression des limites de débit
+    'verbose': True,            # Activer les logs détaillés
+    'max_filesize': 1024 * 1024 * 1024  # Limite de taille fixée à 1024MB
+}
 
-def copy_file_with_verification(source_path, dest_path): 
-    """Copie un fichier avec vérification de l'intégrité.""" 
-    try: 
-        # Vérifier la taille du fichier source 
-        source_size = source_path.stat().st_size 
-        logger.info(f"Taille du fichier source : {source_size} bytes") 
+def extract_video_id(url):
+    # Gestion des différents formats d'URL YouTube
+    if 'youtube.com/embed/' in url:
+        return url.split('/')[-1].split('?')[0]
+    elif 'youtube.com/watch?v=' in url:
+        return url.split('watch?v=')[1].split('&')[0]
+    elif 'youtu.be/' in url:
+        return url.split('youtu.be/')[1].split('?')[0]
+    return None
 
-        # Copier le fichier avec vérification 
-        with open(source_path, 'rb') as src, open(dest_path, 'wb') as dst: 
-            shutil.copyfileobj(src, dst, length=1024*1024)  # Copie par blocs de 1MB 
+@app.route('/download', methods=['POST', 'OPTIONS'])
+def download_video():
+    if request.method == 'OPTIONS':
+        return '', 200
+        
+    try:
+        data = request.get_json()
+        url = data.get('url')
+        if not url:
+            return jsonify({'error': 'URL is required'}), 400
 
-        # Vérifier la taille du fichier copié 
-        dest_size = dest_path.stat().st_size 
-        logger.info(f"Taille du fichier copié : {dest_size} bytes") 
+        print(f"\nDémarrage du téléchargement pour : {url}")
+        
+        with TemporaryDirectory() as temp_path:
+            temp_path = Path(temp_path)
+            temp_opts = ydl_opts.copy()
+            temp_opts['outtmpl'] = str(temp_path / '%(title)s.%(ext)s')
 
-        # Vérifier que les tailles correspondent 
-        if source_size != dest_size: 
-            logger.error(f"Erreur de copie : tailles différentes (source: {source_size}, destination: {dest_size})") 
-            return False, "Les tailles des fichiers ne correspondent pas" 
+            with yt_dlp.YoutubeDL(temp_opts) as ydl:
+                try:
+                    print("Extraction des informations de la vidéo...")
+                    info = ydl.extract_info(url, download=True)
+                    
+                    if info:
+                        # Nettoyer le nom du fichier
+                        clean_title = sanitize_filename(info['title'])
+                        
+                        # Trouver le fichier téléchargé dans le dossier temporaire
+                        temp_files = list(temp_path.glob('*.mp4'))
+                        if not temp_files:
+                            raise Exception("Aucun fichier MP4 trouvé après le téléchargement")
+                        
+                        temp_video_path = temp_files[0]
+                        final_video_path = DOWNLOAD_FOLDER / f"{clean_title}.mp4"
+                        
+                        # S'assurer que le dossier de destination existe
+                        DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+                        
+                        # Copier le fichier vers le dossier permanent
+                        shutil.copy2(str(temp_video_path), str(final_video_path))
+                        print(f"Vidéo sauvegardée dans : {final_video_path}")
+                        
+                        # Envoyer le fichier depuis le dossier permanent
+                        return send_file(
+                            str(final_video_path),
+                            mimetype='video/mp4',
+                            as_attachment=True,
+                            download_name=f"{clean_title}.mp4"
+                        )
+                    else:
+                        print("Erreur : Impossible d'extraire les informations de la vidéo")
+                        return jsonify({'error': 'Failed to extract video info'}), 500
 
-        return True, None 
+                except Exception as e:
+                    print(f"Erreur lors du téléchargement : {str(e)}")
+                    return jsonify({'error': str(e)}), 500
 
-    except Exception as e: 
-        logger.error(f"Erreur lors de la copie du fichier : {str(e)}") 
-        return False, str(e) 
+    except Exception as e:
+        print(f"Erreur générale : {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/download', methods=['POST']) 
-def download_video(): 
-    try: 
-        url = request.json.get('url') 
-        if not url: 
-            return jsonify({'error': 'URL non fournie'}), 400 
-
-        logger.info(f"Démarrage du téléchargement pour : {url}") 
-        logger.info("Extraction des informations de la vidéo...") 
-
-        with TemporaryDirectory() as temp_dir: 
-            # Configurer le dossier de sortie temporaire 
-            ydl_opts['outtmpl'] = str(Path(temp_dir) / '%(title)s.%(ext)s') 
-
-            try: 
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl: 
-                    # Extraire les informations de la vidéo 
-                    info = ydl.extract_info(url, download=True) 
-                    if not info: 
-                        return jsonify({'error': 'Impossible d\'extraire les informations de la vidéo'}), 500 
-
-                    # Obtenir le chemin du fichier téléchargé 
-                    filename = ydl.prepare_filename(info) 
-                    downloaded_file = Path(filename) 
-
-                    if not downloaded_file.exists(): 
-                        return jsonify({'error': 'Fichier non trouvé après le téléchargement'}), 500 
-
-                    # Créer un nom de fichier sécurisé 
-                    safe_filename = sanitize_filename(downloaded_file.stem) + '.mp4' 
-                    output_path = DOWNLOAD_FOLDER / safe_filename 
-
-                    # Copier le fichier avec vérification 
-                    success, error_message = copy_file_with_verification(downloaded_file, output_path) 
-                    if not success: 
-                        if output_path.exists(): 
-                            output_path.unlink() 
-                        return jsonify({'error': f'Erreur lors de la copie : {error_message}'}), 500 
-
-                    # Obtenir la taille finale du fichier 
-                    final_size = output_path.stat().st_size 
-
-                    return jsonify({ 
-                        'success': True, 
-                        'message': 'Vidéo téléchargée avec succès', 
-                        'filename': safe_filename, 
-                        'path': str(output_path), 
-                        'size': final_size 
-                    }) 
-
-            except Exception as e: 
-                logger.error(f"Erreur lors du téléchargement : {str(e)}") 
-                return jsonify({'error': f'Erreur lors du téléchargement : {str(e)}'}), 500 
-
-    except Exception as e: 
-        logger.error(f"Erreur générale : {str(e)}") 
-        return jsonify({'error': f'Erreur générale : {str(e)}'}), 500 
-
-if __name__ == '__main__': 
-    app.run(debug=True, host='0.0.0.0', port=5000, timeout=300)
+if __name__ == '__main__':
+    print(f"Démarrage du serveur de téléchargement...")
+    print(f"Les vidéos seront sauvegardées dans : {DOWNLOAD_FOLDER}")
+    app.run(host='0.0.0.0', port=5000, debug=True)# Timeout augmenté à 300 secondes
