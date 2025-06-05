@@ -112,9 +112,7 @@ def download_video():
             # Post-processeurs avec la configuration correcte
             'postprocessors': [{
                 'key': 'FFmpegVideoConvertor',
-                'preferedformat': 'mp4',
-                # Utiliser les options FFmpeg directement
-                'ffmpeg_args': ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac', '-b:a', '128k']
+                'preferedformat': 'mp4'
             }],
             'verbose': True
         }
