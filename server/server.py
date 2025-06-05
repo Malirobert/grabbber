@@ -109,17 +109,12 @@ def download_video():
                 'XVideos': {'download_timeout': 30}
             },
             
-            # Post-processeurs
+            # Post-processeurs avec la configuration correcte
             'postprocessors': [{
                 'key': 'FFmpegVideoConvertor',
                 'preferedformat': 'mp4',
-                'params': [
-                    '-c:v', 'libx264',
-                    '-preset', 'ultrafast',
-                    '-crf', '28',
-                    '-c:a', 'aac',
-                    '-b:a', '128k'
-                ]
+                # Utiliser les options FFmpeg directement
+                'ffmpeg_args': ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '28', '-c:a', 'aac', '-b:a', '128k']
             }],
             'verbose': True
         }
