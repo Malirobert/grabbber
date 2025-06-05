@@ -35,7 +35,7 @@ def sanitize_filename(filename):
 
 # Configuration optimisée pour yt-dlp
 ydl_opts = {
-    'format': 'bestvideo[height<=480]+bestaudio/best[height<=480]/best',  # Limité à 480p
+    'format': 'bestvideo[height<=480]+bestaudio/best[height<=480]',  # Limité à 480p
     'merge_output_format': 'mp4',
     'postprocessors': [{
         'key': 'FFmpegVideoConvertor',
@@ -65,12 +65,12 @@ ydl_opts = {
         }
     },
     # Optimisations de performance
-    'buffersize': 1024 * 1024,  # Buffer de 1MB
+    'buffersize': 1024 * 1024,  # Buffer augmenté à 1MB
     'concurrent_fragments': 10,  # Plus de téléchargements simultanés
     'file_access_retries': 5,   # Plus de tentatives
     'fragment_retries': 5,      # Plus de tentatives pour les fragments
     'retry_sleep': 5,           # Temps d'attente entre les tentatives
-    'socket_timeout': 180,      # Timeout augmenté à 180 secondes (3 minutes)
+    'socket_timeout': 300,      # Timeout augmenté à 300 secondes (5 minutes)
     'stream': True,             # Activation du streaming direct
     'throttledratelimit': None, # Suppression des limites de débit
     'verbose': True,            # Activer les logs détaillés
@@ -151,4 +151,4 @@ def download_video():
 if __name__ == '__main__':
     print(f"Démarrage du serveur de téléchargement...")
     print(f"Les vidéos seront sauvegardées dans : {DOWNLOAD_FOLDER}")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True, timeout=300)  # Timeout augmenté à 300 secondes
