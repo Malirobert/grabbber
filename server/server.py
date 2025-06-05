@@ -39,10 +39,14 @@ ydl_opts = {
     'merge_output_format': 'mp4',
     'postprocessors': [{
         'key': 'FFmpegVideoConvertor',
-        'preferedformat': 'mp4',
-        'params': ['-vcodec', 'h264', '-acodec', 'aac', '-strict', 'experimental']
+        'preferedformat': 'mp4'
     }],
     'prefer_ffmpeg': True,
+    'postprocessor_args': [
+        '-vcodec', 'h264',
+        '-acodec', 'aac',
+        '-strict', 'experimental'
+    ],
     'extract_flat': True,  # Pour extraire les métadonnées sans télécharger
     'outtmpl': '%(title)s.%(ext)s',
     'nocheckcertificate': True,
