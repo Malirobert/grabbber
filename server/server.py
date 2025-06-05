@@ -54,12 +54,6 @@ def download_video():
 
     data = request.get_json()
     url = data.get('url')
-    browser = data.get('browser', 'chrome')  # Par défaut utilise Chrome
-    
-    # Vérifier si le navigateur est supporté
-    supported_browsers = ['chrome', 'edge', 'firefox']
-    if browser not in supported_browsers:
-        return jsonify({"error": f"Navigateur non supporté. Utilisez un des navigateurs suivants : {', '.join(supported_browsers)}"}), 400
     
     if not url:
         return jsonify({"error": "URL is required"}), 400
@@ -80,11 +74,11 @@ def download_video():
             
             # Optimisations pour Render freemium
             'buffersize': 512 * 1024,  # 512KB buffer
-            'concurrent_fragments': 5,  # Réduit de 10 à 5
+            'concurrent_fragments': 5,
             'file_access_retries': 3,
             'fragment_retries': 3,
-            'retry_sleep': 0.5,  # Réduit de 1 à 0.5 secondes
-            'socket_timeout': 30,  # Augmenté pour les sites lents
+            'retry_sleep': 0.5,
+            'socket_timeout': 30,
             'stream': True,
             'throttledratelimit': 1024 * 1024,  # ~1MB/s
             
@@ -92,28 +86,6 @@ def download_video():
             'max_filesize': 400 * 1024 * 1024,  # 400MB max
             
             # Headers renforcés pour l'authentification
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'DNT': '1',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Sec-Fetch-User': '?1',
-                'Sec-Fetch-Dest': 'document',
-                'Upgrade-Insecure-Requests': '1',
-                'Connection': 'keep-alive',
-                'Cache-Control': 'max-age=0',
-                'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
-                'Sec-Ch-Ua-Mobile': '?0',
-                'Sec-Ch-Ua-Platform': '"Windows"'
-            },
-            
-            # Utiliser les cookies du navigateur
-            'cookiesfrombrowser': (browser, ),  # Chrome par défaut
-            
-            # Headers pour éviter les blocages
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -137,11 +109,10 @@ def download_video():
                 'XVideos': {'download_timeout': 30}
             },
             
-            # Désactiver les post-processeurs non essentiels
+            # Post-processeurs
             'postprocessors': [{
                 'key': 'FFmpegVideoConvertor',
                 'preferedformat': 'mp4',
-                # Options minimales pour la conversion
                 'params': [
                     '-c:v', 'libx264',
                     '-preset', 'ultrafast',
