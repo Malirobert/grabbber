@@ -35,7 +35,7 @@ def sanitize_filename(filename):
 
 # Configuration optimisée pour yt-dlp
 ydl_opts = {
-    'format': 'bestvideo[vcodec^=avc1][height<=480]+bestaudio/best[vcodec^=avc1]/best',
+    'format': 'bestvideo[height=360][vcodec^=avc1]+bestaudio[acodec^=mp4a]/best[height=360]',
     'merge_output_format': 'mp4',
     'postprocessors': [{
         'key': 'FFmpegVideoConvertor',
@@ -45,7 +45,8 @@ ydl_opts = {
     'postprocessor_args': [
         '-vcodec', 'h264',
         '-acodec', 'aac',
-        '-strict', 'experimental'
+        '-strict', 'experimental',
+        'movflags': '+faststart'
     ],
     'extract_flat': True,  # Pour extraire les métadonnées sans télécharger
     'outtmpl': '%(title)s.%(ext)s',
