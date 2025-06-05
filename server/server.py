@@ -45,8 +45,7 @@ ydl_opts = {
     'postprocessor_args': [
         '-vcodec', 'h264',
         '-acodec', 'aac',
-        '-strict', 'experimental',
-        'movflags': '+faststart'
+        '-strict', 'experimental'
     ],
     'extract_flat': True,  # Pour extraire les métadonnées sans télécharger
     'outtmpl': '%(title)s.%(ext)s',
