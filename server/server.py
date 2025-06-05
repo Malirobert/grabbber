@@ -35,7 +35,7 @@ def sanitize_filename(filename):
 
 # Configuration optimisée pour yt-dlp
 ydl_opts = {
-    'format': 'bestvideo[vcodec^=avc1][height<=1080]+bestaudio/best[vcodec^=avc1]/best',
+    'format': 'bestvideo[height<=480]+bestaudio/best[height<=480]/best',  # Limité à 480p
     'merge_output_format': 'mp4',
     'postprocessors': [{
         'key': 'FFmpegVideoConvertor',
@@ -65,15 +65,16 @@ ydl_opts = {
         }
     },
     # Optimisations de performance
-    'buffersize': 1024 * 1024,  # Buffer augmenté à 1MB
+    'buffersize': 1024 * 1024,  # Buffer de 1MB
     'concurrent_fragments': 10,  # Plus de téléchargements simultanés
-    'file_access_retries': 3,   # Moins de tentatives mais plus efficaces
-    'fragment_retries': 3,      # Moins de tentatives pour les fragments
-    'retry_sleep': 1,           # Temps d'attente réduit entre les tentatives
-    'socket_timeout': 10,       # Timeout réduit mais suffisant
+    'file_access_retries': 5,   # Plus de tentatives
+    'fragment_retries': 5,      # Plus de tentatives pour les fragments
+    'retry_sleep': 5,           # Temps d'attente entre les tentatives
+    'socket_timeout': 180,      # Timeout augmenté à 180 secondes (3 minutes)
     'stream': True,             # Activation du streaming direct
     'throttledratelimit': None, # Suppression des limites de débit
     'verbose': True,            # Activer les logs détaillés
+    'max_filesize': 1024 * 1024 * 1024  # Limite de taille fixée à 1024MB
 }
 
 def extract_video_id(url):
