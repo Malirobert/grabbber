@@ -40,17 +40,17 @@ def sanitize_filename(filename):
 
 # Configuration optimisée pour yt-dlp 
 ydl_opts = { 
-    'format': 'bestvideo[vcodec^=avc1][height<=480]+bestaudio/best[vcodec^=avc1]/best',  # Format optimisé pour TikTok 
-    'merge_output_format': 'mp4', 
-    'postprocessors': [{ 
-        'key': 'FFmpegVideoConvertor', 
-        'preferedformat': 'mp4' 
-    }], 
-    'postprocessor_args': [ 
-        '-vcodec', 'h264', 
-        '-acodec', 'aac', 
-        '-strict', 'experimental' 
-    ],
+    'format': 'bestvideo[vcodec^=avc1][height<=480]+bestaudio/best[vcodec^=avc1]/best',
+    'merge_output_format': 'mp4',
+    'postprocessors': [{
+        'key': 'FFmpegVideoConvertor',
+        'preferedformat': 'mp4',
+        'params': [
+            '-vcodec', 'h264',
+            '-acodec', 'aac',
+            '-strict', 'experimental'
+        ]
+    }],
     'extract_flat': True, 
     'outtmpl': '/tmp/%(title)s.%(ext)s', 
     'nocheckcertificate': True, 
