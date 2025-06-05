@@ -54,7 +54,6 @@ def download_video():
 
     data = request.get_json()
     url = data.get('url')
-    browser = data.get('browser', 'chrome')  # Par défaut utilise Chrome
     
     if not url:
         return jsonify({"error": "URL is required"}), 400
@@ -63,62 +62,41 @@ def download_video():
     temp_dir = tempfile.mkdtemp()
     try:
         ydl_opts = {
-            # Réduire la qualité vidéo pour économiser la mémoire
-            'format': 'bestvideo[height<=480][vcodec^=avc1]+bestaudio/best[height<=480]/best',
+            'format': 'bestvideo[vcodec^=avc1][height<=1080]+bestaudio/best[vcodec^=avc1]/best',
             'merge_output_format': 'mp4',
+            'postprocessors': [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4'
+            }],
             'prefer_ffmpeg': True,
+            'postprocessor_args': [
+                '-vcodec', 'h264',
+                '-acodec', 'aac',
+                '-strict', 'experimental'
+            ],
             'extract_flat': True,
             'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
             'nocheckcertificate': True,
             'quiet': False,
             'noprogress': False,
-            
-            # Optimisations pour Render freemium
-            'buffersize': 512 * 1024,  # 512KB buffer
-            'concurrent_fragments': 5,  # Réduit de 10 à 5
-            'file_access_retries': 3,
-            'fragment_retries': 3,
-            'retry_sleep': 0.5,  # Réduit de 1 à 0.5 secondes
-            'socket_timeout': 30,  # Augmenté pour les sites lents
-            'stream': True,
-            'throttledratelimit': 1024 * 1024,  # ~1MB/s
-            
-            # Limite de taille pour éviter les timeouts
-            'max_filesize': 150 * 1024 * 1024,  # 150MB max
-            
-            # Utiliser les cookies du navigateur
-            'cookiesfrombrowser': (browser, ),  # Chrome par défaut
-            
-            # Headers pour éviter les blocages
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-us,en;q=0.5',
                 'Sec-Fetch-Mode': 'navigate'
             },
-            
-            # Configurations spécifiques par site
             'extractor_args': {
                 'TikTok': {'format': 'h264'},
-                'youtube': {'player_client': ['android']},
-                'Instagram': {'compatible_format': True},
-                'Pornhub': {'download_timeout': 30},
-                'XVideos': {'download_timeout': 30}
+                'youtube': {'player_client': ['android'], 'formats': 'missing_pot'}
             },
-            
-            # Désactiver les post-processeurs non essentiels
-            'postprocessors': [{
-                'key': 'FFmpegVideoConvertor',
-                'preferedformat': 'mp4',
-                # Options minimales pour la conversion
-                'params': [
-                    '-c:v', 'libx264',
-                    '-preset', 'ultrafast',
-                    '-crf', '28',
-                    '-c:a', 'aac',
-                    '-b:a', '128k'
-                ]
-            }],
+            'buffersize': 1024 * 1024,  # 1MB buffer
+            'concurrent_fragments': 10,
+            'file_access_retries': 3,
+            'fragment_retries': 3,
+            'retry_sleep': 1,
+            'socket_timeout': 10,
+            'stream': True,
+            'throttledratelimit': None,
             'verbose': True
         }
 
