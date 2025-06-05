@@ -51,6 +51,7 @@ ydl_opts = {
             '-strict', 'experimental'
         ]
     }],
+    'prefer_ffmpeg': True,
     'extract_flat': True, 
     'outtmpl': '/tmp/%(title)s.%(ext)s', 
     'nocheckcertificate': True, 
