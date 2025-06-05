@@ -35,13 +35,18 @@ def sanitize_filename(filename):
 
 # Configuration optimisée pour yt-dlp
 ydl_opts = {
-    'format': 'bestvideo[height<=480]+bestaudio/best[height<=480]',  # Limité à 480p
+    'format': 'bestvideo[vcodec^=avc1][height<=480]+bestaudio/best[vcodec^=avc1]/best',
     'merge_output_format': 'mp4',
-    # Post-processeurs avec la configuration correcte
     'postprocessors': [{
         'key': 'FFmpegVideoConvertor',
-        'preferedformat': 'mp4'
+        'preferedformat': 'mp4',
     }],
+    'prefer_ffmpeg': True,
+    'postprocessor_args': [
+        '-vcodec', 'h264',
+        '-acodec', 'aac',
+        '-strict', 'experimental'
+    ],
     'extract_flat': True,  # Pour extraire les métadonnées sans télécharger
     'outtmpl': '%(title)s.%(ext)s',
     'nocheckcertificate': True,
@@ -146,4 +151,4 @@ def download_video():
 if __name__ == '__main__':
     print(f"Démarrage du serveur de téléchargement...")
     print(f"Les vidéos seront sauvegardées dans : {DOWNLOAD_FOLDER}")
-    app.run(host='0.0.0.0', port=5000, debug=True)# Timeout augmenté à 300 secondes
+    app.run(host='0.0.0.0', port=5000, debug=True)
