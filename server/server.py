@@ -15,22 +15,14 @@ CORS(app)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Utilisation de pathlib pour créer un chemin multiplateforme
-DOWNLOAD_FOLDER = Path.home() / "Videos" / "Downloads"
+# Utilisation d'un chemin plus simple et fiable
+DOWNLOAD_FOLDER = Path("downloads")
 DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
 def sanitize_filename(filename):
-    # Supprimer les emojis et autres caractères spéciaux
-    filename = ''.join(char for char in filename if unicodedata.category(char)[0] != 'So')
-    
-    # Supprimer ou remplacer les caractères non-ASCII
-    filename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore').decode('ASCII')
-    
-    # Remplacer les caractères interdits par des tirets
-    filename = re.sub(r'[<>:"/\\|?*]', '-', filename)
-    
-    # Remplacer les espaces multiples par un seul espace
-    filename = re.sub(r'\s+', ' ', filename)
+    # Version simplifiée qui garde plus de caractères valides
+    # Remplacer uniquement les caractères vraiment problématiques
+    filename = re.sub(r'[<>:"\\\|?*]', '-', filename)
     
     # Limiter la longueur du nom de fichier
     if len(filename) > 240:
