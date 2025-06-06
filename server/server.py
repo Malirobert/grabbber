@@ -35,7 +35,8 @@ def sanitize_filename(filename):
 
 # Configuration optimisée pour yt-dlp
 ydl_opts = {
-    'format': 'bestvideo[height=360][vcodec^=avc1]+bestaudio[acodec^=mp4a]/best[height=360]',
+    # Format flexible avec codec h264 et résolution adaptée
+    'format': 'bestvideo[vcodec^=avc1][height<=480]+bestaudio/best[vcodec^=avc1]/best[height<=480]',
     'merge_output_format': 'mp4',
     'postprocessors': [{
         'key': 'FFmpegVideoConvertor',
@@ -45,15 +46,19 @@ ydl_opts = {
     'postprocessor_args': [
         '-vcodec', 'h264',
         '-acodec', 'aac',
-        '-strict', 'experimental'
+        '-strict', 'experimental',
+        '-b:v', '800k',        # Bitrate vidéo adapté
+        '-maxrate', '1000k',   # Bitrate maximum
+        '-bufsize', '1000k'    # Taille du buffer
     ],
-    'extract_flat': True,  # Pour extraire les métadonnées sans télécharger
+    # Paramètres communs optimisés
+    'extract_flat': True,
     'outtmpl': '%(title)s.%(ext)s',
     'nocheckcertificate': True,
-    'quiet': False,  # Réactiver les logs
-    'noprogress': False,  # Réactiver l'affichage de la progression
+    'quiet': False,
+    'noprogress': False,
     'http_headers': {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
     },
     'extractor_args': {
         'TikTok': {
@@ -64,17 +69,17 @@ ydl_opts = {
             'formats': 'missing_pot'
         }
     },
-    # Optimisations de performance
-    'buffersize': 1024 * 1024,  # Buffer augmenté à 1MB
-    'concurrent_fragments': 10,  # Plus de téléchargements simultanés
-    'file_access_retries': 5,   # Plus de tentatives
-    'fragment_retries': 5,      # Plus de tentatives pour les fragments
-    'retry_sleep': 5,           # Temps d'attente entre les tentatives
-    'socket_timeout': 300,      # Timeout augmenté à 300 secondes (5 minutes)
-    'stream': True,             # Activation du streaming direct
-    'throttledratelimit': None, # Suppression des limites de débit
-    'verbose': True,            # Activer les logs détaillés
-    'max_filesize': 1024 * 1024 * 1024  # Limite de taille fixée à 1024MB
+    # Optimisations de performance équilibrées
+    'buffersize': 1024 * 1024,
+    'concurrent_fragments': 5,     # Valeur moyenne entre les deux codes
+    'file_access_retries': 5,
+    'fragment_retries': 5,
+    'retry_sleep': 3,              # Compromis pour le temps d'attente
+    'socket_timeout': 180,         # 3 minutes - compromis raisonnable
+    'stream': True,
+    'throttledratelimit': None,
+    'verbose': True,
+    'max_filesize': 1024 * 1024 * 1024  # 1GB limite
 }
 
 def extract_video_id(url):
