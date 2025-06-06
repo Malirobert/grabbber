@@ -21,23 +21,22 @@ DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
 def sanitize_filename(filename):
     # Supprimer les caractères spéciaux et les emojis
-    filename = ''.join(char for char in filename if char.isalnum() or char in '._- ')
+    filename = ''.join(char for char in filename if unicodedata.category(char)[0] != 'So')
+    
+    # Supprimer ou remplacer les caractères non-ASCII
+    filename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore').decode('ASCII')
+    
+    # Remplacer les caractères interdits par des tirets
+    filename = re.sub(r'[<>:"/\\|?*]', '-', filename)
     
     # Remplacer les espaces multiples par un seul espace
     filename = re.sub(r'\s+', ' ', filename)
     
-    # Supprimer les espaces et points au début et à la fin
-    filename = filename.strip('. ')
-    
-    # Si le nom est vide après nettoyage, utiliser un nom par défaut
-    if not filename:
-        filename = 'video'
-    
-    # Limiter la longueur
-    if len(filename) > 240:
+    # Limiter la longueur du nom de fichier
+    if len(filename) > 240:  # Windows a une limite de 260 caractères pour le chemin complet
         filename = filename[:240]
     
-    return filename
+    return filename.strip()
 
 # Configuration optimisée pour yt-dlp
 ydl_opts = {
