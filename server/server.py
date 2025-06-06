@@ -76,7 +76,6 @@ ydl_opts = {
     'verbose': True,            # Activer les logs détaillés
     'max_filesize': 2 * 1024 * 1024 * 1024  # Limite de taille fixée à 2GB
 }
-}
 
 def extract_video_id(url):
     # Gestion des différents formats d'URL YouTube
