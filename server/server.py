@@ -35,30 +35,31 @@ def sanitize_filename(filename):
 
 # Configuration optimisée pour yt-dlp
 ydl_opts = {
-    # Format flexible avec codec h264 et résolution adaptée
-    'format': 'bestvideo[vcodec^=avc1][height<=480]+bestaudio/best[vcodec^=avc1]/best[height<=480]',
+    # Format par défaut pour les sites non spécifiés
+    'format': 'bestvideo[vcodec^=avc1][height<=1080]+bestaudio/best[vcodec^=avc1]/best',
     'merge_output_format': 'mp4',
     'postprocessors': [{
         'key': 'FFmpegVideoConvertor',
-        'preferedformat': 'mp4'
+        'preferedformat': 'mp4',
     }],
     'prefer_ffmpeg': True,
     'postprocessor_args': [
         '-vcodec', 'h264',
         '-acodec', 'aac',
         '-strict', 'experimental',
-        '-b:v', '800k',        # Bitrate vidéo adapté
-        '-maxrate', '1000k',   # Bitrate maximum
-        '-bufsize', '1000k'    # Taille du buffer
+        # Paramètres de qualité pour réduire la taille des fichiers volumineux
+        '-crf', '23',            # Contrôle la qualité (18-28 est un bon compromis)
+        '-preset', 'medium',      # Équilibre entre vitesse et compression
+        '-maxrate', '1500k',      # Limite le bitrate maximum
+        '-bufsize', '2000k'       # Buffer pour le contrôle de débit
     ],
-    # Paramètres communs optimisés
     'extract_flat': True,
     'outtmpl': '%(title)s.%(ext)s',
     'nocheckcertificate': True,
     'quiet': False,
     'noprogress': False,
     'http_headers': {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     },
     'extractor_args': {
         'TikTok': {
@@ -66,20 +67,27 @@ ydl_opts = {
         },
         'youtube': {
             'player_client': ['android'],
-            'formats': 'missing_pot'
+            'formats': 'missing_pot',
+            'format': 'best[height<=480]'  # Force 480p pour YouTube
+        },
+        'Pornhub': {
+            'format': 'best[height<=480]'  # Force 480p pour Pornhub
+        },
+        'Xvideos': {
+            'format': 'best[height<=480]'  # Force 480p pour Xvideos
         }
     },
-    # Optimisations de performance équilibrées
-    'buffersize': 1024 * 1024,
-    'concurrent_fragments': 5,     # Valeur moyenne entre les deux codes
-    'file_access_retries': 5,
-    'fragment_retries': 5,
-    'retry_sleep': 3,              # Compromis pour le temps d'attente
-    'socket_timeout': 180,         # 3 minutes - compromis raisonnable
-    'stream': True,
-    'throttledratelimit': None,
-    'verbose': True,
-    'max_filesize': 1024 * 1024 * 1024  # 1GB limite
+    # Optimisations de performance ajustées
+	'buffersize': 1024 * 1024,  # Buffer augmenté à 1MB
+    'concurrent_fragments': 10,  # Plus de téléchargements simultanés
+    'file_access_retries': 5,   # Plus de tentatives
+    'fragment_retries': 5,      # Plus de tentatives pour les fragments
+    'retry_sleep': 5,           # Temps d'attente entre les tentatives
+    'socket_timeout': 300,      # Timeout augmenté à 300 secondes (5 minutes)
+    'stream': True,             # Activation du streaming direct
+    'throttledratelimit': None, # Suppression des limites de débit
+    'verbose': True,            # Activer les logs détaillés
+    'max_filesize': 1024 * 1024 * 1024  # Limite de taille fixée à 1024MB
 }
 
 def extract_video_id(url):
