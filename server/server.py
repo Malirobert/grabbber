@@ -48,15 +48,17 @@ ydl_opts = {
     }],
     'prefer_ffmpeg': True,
     'postprocessor_args': [
-        '-vcodec', 'h264',
-        '-acodec', 'aac',
-        '-strict', 'experimental'
+        '-c:v', 'copy',  # Copier le flux vidéo sans réencodage
+        '-c:a', 'aac',   # Convertir l'audio en AAC si nécessaire
+        '-movflags', '+faststart'
     ],
-    'extract_flat': True,
-    'outtmpl': '%(title)s.%(ext)s',
+    'outtmpl': str(DOWNLOAD_FOLDER / '%(title)s.%(ext)s'),  # Télécharger directement dans le dossier final
     'nocheckcertificate': True,
     'quiet': False,
-    'noprogress': False,
+    'verbose': True,
+    'buffersize': 1024 * 1024 * 1024,  # 1GB buffer
+    'socket_timeout': 600,
+    'retries': 5,
     'http_headers': {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     },
@@ -68,17 +70,7 @@ ydl_opts = {
             'player_client': ['android'],
             'formats': 'missing_pot'
         }
-    },
-    'buffersize': 1024 * 1024 * 1024,
-    'concurrent_fragments': 10,
-    'file_access_retries': 5,
-    'fragment_retries': 5,
-    'retry_sleep': 5,
-    'socket_timeout': 600,
-    'stream': True,
-    'throttledratelimit': None,
-    'verbose': True,
-    'max_filesize': 2 * 1024 * 1024 * 1024
+    }
 }
 
 def copy_file_with_verification(source_path, dest_path):
@@ -133,7 +125,6 @@ def download_video():
         with TemporaryDirectory() as temp_path:
             temp_path = Path(temp_path)
             temp_opts = ydl_opts.copy()
-            temp_opts['outtmpl'] = str(temp_path / '%(title)s.%(ext)s')
 
             with yt_dlp.YoutubeDL(temp_opts) as ydl:
                 try:
@@ -143,25 +134,7 @@ def download_video():
                     if info:
                         # Nettoyer le nom du fichier
                         clean_title = sanitize_filename(info['title'])
-                        
-                        # Trouver le fichier téléchargé dans le dossier temporaire
-                        temp_files = list(temp_path.glob('*.mp4'))
-                        if not temp_files:
-                            raise Exception("Aucun fichier MP4 trouvé après le téléchargement")
-                        
-                        temp_video_path = temp_files[0]
                         final_video_path = DOWNLOAD_FOLDER / f"{clean_title}.mp4"
-                        
-                        # S'assurer que le dossier de destination existe
-                        DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
-                        
-                        # Copier le fichier avec vérification
-                        if not copy_file_with_verification(temp_video_path, final_video_path):
-                            if final_video_path.exists():
-                                final_video_path.unlink()
-                            return jsonify({'error': 'Erreur lors de la copie du fichier'}), 500
-
-                        logger.info(f"Vidéo sauvegardée dans : {final_video_path}")
                         
                         # Envoyer le fichier depuis le dossier permanent
                         return send_file(
