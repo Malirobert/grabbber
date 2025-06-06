@@ -6,9 +6,14 @@ import shutil
 from tempfile import TemporaryDirectory
 import re
 import unicodedata
+import logging
 
 app = Flask(__name__)
 CORS(app)
+
+# Configuration du logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Utilisation de pathlib pour créer un chemin multiplateforme
 DOWNLOAD_FOLDER = Path.home() / "Videos" / "Downloads"
@@ -28,7 +33,7 @@ def sanitize_filename(filename):
     filename = re.sub(r'\s+', ' ', filename)
     
     # Limiter la longueur du nom de fichier
-    if len(filename) > 240:  # Windows a une limite de 260 caractères pour le chemin complet
+    if len(filename) > 240:
         filename = filename[:240]
     
     return filename.strip()
@@ -47,11 +52,11 @@ ydl_opts = {
         '-acodec', 'aac',
         '-strict', 'experimental'
     ],
-    'extract_flat': True,  # Pour extraire les métadonnées sans télécharger
+    'extract_flat': True,
     'outtmpl': '%(title)s.%(ext)s',
     'nocheckcertificate': True,
-    'quiet': False,  # Réactiver les logs
-    'noprogress': False,  # Réactiver l'affichage de la progression
+    'quiet': False,
+    'noprogress': False,
     'http_headers': {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     },
@@ -64,18 +69,43 @@ ydl_opts = {
             'formats': 'missing_pot'
         }
     },
-    # Optimisations de performance
-    'buffersize': 1024 * 1024 * 1024,  # Buffer augmenté à 1GB
-    'concurrent_fragments': 10,  # Plus de téléchargements simultanés
-    'file_access_retries': 5,   # Plus de tentatives
-    'fragment_retries': 5,      # Plus de tentatives pour les fragments
-    'retry_sleep': 5,           # Temps d'attente entre les tentatives
-    'socket_timeout': 600,      # Timeout augmenté à 300 secondes (5 minutes)
-    'stream': True,             # Activation du streaming direct
-    'throttledratelimit': None, # Suppression des limites de débit
-    'verbose': True,            # Activer les logs détaillés
-    'max_filesize': 2 * 1024 * 1024 * 1024  # Limite de taille fixée à 2GB
+    'buffersize': 1024 * 1024 * 1024,
+    'concurrent_fragments': 10,
+    'file_access_retries': 5,
+    'fragment_retries': 5,
+    'retry_sleep': 5,
+    'socket_timeout': 600,
+    'stream': True,
+    'throttledratelimit': None,
+    'verbose': True,
+    'max_filesize': 2 * 1024 * 1024 * 1024
 }
+
+def copy_file_with_verification(source_path, dest_path):
+    """Copie un fichier avec vérification de l'intégrité."""
+    try:
+        # Vérifier la taille du fichier source
+        source_size = source_path.stat().st_size
+        logger.info(f"Taille du fichier source : {source_size} bytes")
+
+        # Copier le fichier avec vérification
+        with open(source_path, 'rb') as src, open(dest_path, 'wb') as dst:
+            shutil.copyfileobj(src, dst, length=1024*1024)  # Copie par blocs de 1MB
+
+        # Vérifier la taille du fichier copié
+        dest_size = dest_path.stat().st_size
+        logger.info(f"Taille du fichier copié : {dest_size} bytes")
+
+        # Vérifier que les tailles correspondent
+        if source_size != dest_size:
+            logger.error(f"Erreur de copie : tailles différentes (source: {source_size}, destination: {dest_size})")
+            return False
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la copie du fichier : {str(e)}")
+        return False
 
 def extract_video_id(url):
     # Gestion des différents formats d'URL YouTube
@@ -98,7 +128,7 @@ def download_video():
         if not url:
             return jsonify({'error': 'URL is required'}), 400
 
-        print(f"\nDémarrage du téléchargement pour : {url}")
+        logger.info(f"\nDémarrage du téléchargement pour : {url}")
         
         with TemporaryDirectory() as temp_path:
             temp_path = Path(temp_path)
@@ -107,7 +137,7 @@ def download_video():
 
             with yt_dlp.YoutubeDL(temp_opts) as ydl:
                 try:
-                    print("Extraction des informations de la vidéo...")
+                    logger.info("Extraction des informations de la vidéo...")
                     info = ydl.extract_info(url, download=True)
                     
                     if info:
@@ -125,9 +155,13 @@ def download_video():
                         # S'assurer que le dossier de destination existe
                         DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
                         
-                        # Copier le fichier vers le dossier permanent
-                        shutil.copy2(str(temp_video_path), str(final_video_path))
-                        print(f"Vidéo sauvegardée dans : {final_video_path}")
+                        # Copier le fichier avec vérification
+                        if not copy_file_with_verification(temp_video_path, final_video_path):
+                            if final_video_path.exists():
+                                final_video_path.unlink()
+                            return jsonify({'error': 'Erreur lors de la copie du fichier'}), 500
+
+                        logger.info(f"Vidéo sauvegardée dans : {final_video_path}")
                         
                         # Envoyer le fichier depuis le dossier permanent
                         return send_file(
@@ -137,18 +171,18 @@ def download_video():
                             download_name=f"{clean_title}.mp4"
                         )
                     else:
-                        print("Erreur : Impossible d'extraire les informations de la vidéo")
+                        logger.error("Erreur : Impossible d'extraire les informations de la vidéo")
                         return jsonify({'error': 'Failed to extract video info'}), 500
 
                 except Exception as e:
-                    print(f"Erreur lors du téléchargement : {str(e)}")
+                    logger.error(f"Erreur lors du téléchargement : {str(e)}")
                     return jsonify({'error': str(e)}), 500
 
     except Exception as e:
-        print(f"Erreur générale : {str(e)}")
+        logger.error(f"Erreur générale : {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    print(f"Démarrage du serveur de téléchargement...")
-    print(f"Les vidéos seront sauvegardées dans : {DOWNLOAD_FOLDER}")
+    logger.info("Démarrage du serveur de téléchargement...")
+    logger.info(f"Les vidéos seront sauvegardées dans : {DOWNLOAD_FOLDER}")
     app.run(host='0.0.0.0', port=5000, debug=True)
