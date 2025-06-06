@@ -20,15 +20,24 @@ DOWNLOAD_FOLDER = Path("/tmp/downloads")
 DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
 def sanitize_filename(filename):
-    # Version simplifiée qui garde plus de caractères valides
-    # Remplacer uniquement les caractères vraiment problématiques
-    filename = re.sub(r'[<>:"\\\|?*]', '-', filename)
+    # Supprimer les caractères spéciaux et les emojis
+    filename = ''.join(char for char in filename if char.isalnum() or char in '._- ')
     
-    # Limiter la longueur du nom de fichier
+    # Remplacer les espaces multiples par un seul espace
+    filename = re.sub(r'\s+', ' ', filename)
+    
+    # Supprimer les espaces et points au début et à la fin
+    filename = filename.strip('. ')
+    
+    # Si le nom est vide après nettoyage, utiliser un nom par défaut
+    if not filename:
+        filename = 'video'
+    
+    # Limiter la longueur
     if len(filename) > 240:
         filename = filename[:240]
     
-    return filename.strip()
+    return filename
 
 # Configuration optimisée pour yt-dlp
 ydl_opts = {
