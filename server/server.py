@@ -32,14 +32,13 @@ ydl_opts = {
     'merge_output_format': 'mp4',
     'postprocessors': [{
         'key': 'FFmpegVideoConvertor',
-        'preferedformat': 'mp4'
+        'preferedformat': 'mp4',
     }],
     'prefer_ffmpeg': True,
     'postprocessor_args': [
-        '-c:v', 'copy',  # Copier le flux vidéo si possible
-        '-c:v', 'h264', # Utiliser h264 si la copie n'est pas possible
-        '-c:a', 'aac',  # Convertir l'audio en AAC si nécessaire
-        '-movflags', '+faststart'
+        '-c:v', 'copy',  # Copier le flux vidéo sans réencodage
+        '-c:a', 'aac',   # Convertir l'audio en AAC si nécessaire
+        '-movflags', '+faststart',
     ],
     'outtmpl': str(DOWNLOAD_FOLDER / '%(title)s.%(ext)s'),  # Télécharger directement dans le dossier final
     'nocheckcertificate': True,
