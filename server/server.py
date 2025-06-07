@@ -33,13 +33,13 @@ ydl_opts = {
     'postprocessors': [{
         'key': 'FFmpegVideoConvertor',
         'preferedformat': 'mp4',
+        'vcodec': 'h264'  # Forcer l'encodage en H.264
     }],
     'prefer_ffmpeg': True,
     'postprocessor_args': [
-        '-c:v', 'copy',  # Copier le flux vidéo sans réencodage
-        '-c:a', 'aac',   # Convertir l'audio en AAC si nécessaire
-        '-movflags', '+faststart',
-        'vcodec': 'h264'
+        '-c:v', 'h264',  # Utiliser H.264 pour l'encodage vidéo
+        '-c:a', 'aac',   # Convertir l'audio en AAC
+        '-movflags', '+faststart'
     ],
     'outtmpl': str(DOWNLOAD_FOLDER / '%(title)s.%(ext)s'),  # Télécharger directement dans le dossier final
     'nocheckcertificate': True,
