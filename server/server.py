@@ -7,7 +7,6 @@ from tempfile import TemporaryDirectory
 import re
 import unicodedata
 import logging
-import os
 
 app = Flask(__name__)
 CORS(app)
@@ -21,34 +20,11 @@ DOWNLOAD_FOLDER = Path("/tmp/downloads")
 DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
 def sanitize_filename(filename):
-    # Supprimer les emojis et caractères spéciaux
-    filename = ''.join(char for char in filename if unicodedata.category(char)[0] not in ['So', 'Sm', 'Sc'])
-    
-    # Normaliser les caractères Unicode
-    filename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore').decode('ASCII')
-    
-    # Remplacer les caractères problématiques par des tirets
-    filename = re.sub(r'[<>:"\\/@|?*&]', '-', filename)
-    
-    # Remplacer les points multiples par un seul point
-    filename = re.sub(r'\.{2,}', '.', filename)
-    
-    # Remplacer les espaces multiples par un seul espace
-    filename = re.sub(r'\s+', ' ', filename)
-    
-    # Supprimer les caractères de contrôle
-    filename = ''.join(char for char in filename if ord(char) >= 32)
-    
-    # S'assurer qu'il y a un nom valide
-    if not filename.strip():
-        filename = 'video'
-    
-    # Limiter la longueur (en gardant l'extension)
-    name, ext = os.path.splitext(filename)
-    if len(name) > 200:
-        filename = name[:200] + ext
-    
-    return filename.strip()
+    # Remplacer uniquement les caractères absolument interdits dans les systèmes de fichiers
+    forbidden_chars = '<>:"\\/|?*'
+    for char in forbidden_chars:
+        filename = filename.replace(char, '-')
+    return filename
 
 # Configuration optimisée pour yt-dlp
 ydl_opts = {
