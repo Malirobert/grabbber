@@ -38,7 +38,8 @@ ydl_opts = {
     'postprocessor_args': [
         '-c:v', 'copy',  # Copier le flux vidéo sans réencodage
         '-c:a', 'aac',   # Convertir l'audio en AAC si nécessaire
-        '-movflags', '+faststart'
+        '-movflags', '+faststart',
+        'vcodec': 'h264'
     ],
     'outtmpl': str(DOWNLOAD_FOLDER / '%(title)s.%(ext)s'),  # Télécharger directement dans le dossier final
     'nocheckcertificate': True,
