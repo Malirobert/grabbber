@@ -20,20 +20,12 @@ DOWNLOAD_FOLDER = Path("/tmp/downloads")
 DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
 def sanitize_filename(filename):
-    # Supprimer les caractères spéciaux et les emojis
-    filename = ''.join(char for char in filename if unicodedata.category(char)[0] != 'So')
-    
-    # Supprimer ou remplacer les caractères non-ASCII
-    filename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore').decode('ASCII')
-    
-    # Remplacer les caractères interdits par des tirets
-    filename = re.sub(r'[<>:"/\\|?*]', '-', filename)
-    
-    # Remplacer les espaces multiples par un seul espace
-    filename = re.sub(r'\s+', ' ', filename)
+    # Version simplifiée qui garde plus de caractères valides
+    # Remplacer uniquement les caractères vraiment problématiques
+    filename = re.sub(r'[<>:"\\\|?*]', '-', filename)
     
     # Limiter la longueur du nom de fichier
-    if len(filename) > 240:  # Windows a une limite de 260 caractères pour le chemin complet
+    if len(filename) > 240:
         filename = filename[:240]
     
     return filename.strip()
