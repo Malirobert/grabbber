@@ -6,10 +6,10 @@
   "permissions": [
     "storage",
     "tabs",
-    "http://localhost:5000/*"
+    "https://grabbber.onrender.com/*"
   ],
   "host_permissions": [
-    
+    "https://grabbber.onrender.com/*"
   ],
   "icons": {
     "16": "icons/icon16.png",
@@ -20,7 +20,8 @@
     "resources": [
       "fonts/*",
       "icons/*",
-      "firebase/*"
+      "firebase/*",
+      "payment.html"
     ],
     "matches": ["<all_urls>"]
   }],
@@ -42,5 +43,8 @@
       "128": "icons/icon128.png"
     },
     "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }

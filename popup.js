@@ -4,9 +4,22 @@ let auth;
 
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Popup.js chargé');
+    
+    // Vérifier le quota au démarrage
+    checkAndResetQuota();
+    
+    // Vérifier le quota toutes les minutes
+    setInterval(checkAndResetQuota, 60000);
+
+    // Gérer le clic sur le lien Pawns.app
+    document.getElementById('pawnsLink').addEventListener('click', function(e) {
+        e.preventDefault();
+        chrome.tabs.create({ url: this.href });
+    });
 
     const modeToggle = document.getElementById('modeToggle');
     const historyBox = document.getElementById('historyBox');
+    const upgradeLink = document.getElementById('upgradeLink'); // Ajouté
     
     // Charger l'état du toggle
     chrome.storage.local.get(['isAIMode'], function(result) {
@@ -14,18 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Gérer le toggle AI
-    modeToggle.addEventListener('click', function(e) {
-        e.preventDefault();
-        const ball = document.querySelector('.slider-ball');
-        // Animation: rotate 180deg and return
-        ball.style.transition = 'transform 0.3s';
-        ball.style.transform = 'rotate(180deg)';
-        setTimeout(() => {
-            ball.style.transform = 'rotate(0deg)';
-        }, 300);
-        // Show the message
-        showToggleMessage();
-    });
+    modeToggle.addEventListener('click', handleToggleClick);
 
     updateQuotaDisplay();
     loadHistory();
@@ -129,7 +131,7 @@ function showToggleMessage() {
     if (existingMessage) existingMessage.remove();
     const message = document.createElement('div');
     message.className = 'toggle-premium-message';
-    message.textContent = 'AI agents feature coming soon';
+    message.textContent = 'Upgrade to Lifetime Plan and unlock unlimited Grabbber! Get exclusive access to Al agents and download as many videos as you want for life without restrictions !';
     document.body.appendChild(message);
     const toggle = document.querySelector('.switch');
     const toggleRect = toggle.getBoundingClientRect();
@@ -149,7 +151,7 @@ const notificationStyle = `
         padding: 12px 20px;
         border-radius: 8px;
         z-index: 10000;
-        animation: slideIn 0.3s ease, fadeOut 0.3s ease 2s forwards;
+        animation: slideIn 0.3s ease;
     }
     
     @keyframes slideIn {
@@ -160,6 +162,16 @@ const notificationStyle = `
     @keyframes fadeOut {
         from { opacity: 1; }
         to { opacity: 0; }
+    }
+
+    @keyframes slideUp {
+        from { transform: translateX(-50%) translateY(100%); opacity: 0; }
+        to { transform: translateX(-50%) translateY(0); opacity: 1; }
+    }
+
+    @keyframes slideDown {
+        from { transform: translateX(-50%) translateY(0); opacity: 1; }
+        to { transform: translateX(-50%) translateY(100%); opacity: 0; }
     }
 `;
 
@@ -227,7 +239,7 @@ const toggleStyle = `
         left: 0;
         right: 0;
         bottom: 0;
-        background-color: #3B82F6;
+        background-color: #4285f4;
         border-radius: 34px;
     }
 
@@ -295,19 +307,70 @@ function updateProfileIcon(initial) {
 }
 
 function updateQuotaDisplay() {
-    chrome.storage.local.get(['dailyQuota', 'lastQuotaReset'], function(result) {
-        const quota = result.dailyQuota || 0;
-        document.querySelector('.quota-text').textContent = `Free quota: ${quota}/10 per day.`;
-        
-        // Désactiver le toggle si quota atteint
-        if (quota >= 10) {
-            modeToggle.disabled = true;
-            modeToggle.checked = false;
+    // Vérifier si l'utilisateur est pro
+    chrome.storage.local.get(['isPro', 'dailyQuota'], function(result) {
+        const quotaText = document.querySelector('.quota-text');
+        if (!quotaText) return;
+
+        if (result.isPro) {
+            // Utilisateur pro - téléchargements illimités
+            quotaText.innerHTML = `
+                <i class="fas fa-infinity"></i> Pro Account: Unlimited downloads
+                <div class="pro-buttons">
+                    <div class="upgrade-pro-link" id="upgradeLink">
+                        <i class="fas fa-crown"></i>
+                        UPGRADE LIFETIME TO OWN GRABBBER
+                    </div>
+                </div>
+            `;
+            quotaText.style.color = '#4CAF50';
+            
+            // Ajouter l'event listener pour le bouton upgrade
+            const upgradeLink = document.getElementById('upgradeLink');
+            if (upgradeLink) {
+                upgradeLink.addEventListener('click', function() {
+                    chrome.windows.create({
+                        url: chrome.runtime.getURL('payment.html'),
+                        type: 'popup',
+                        width: 600,
+                        height: 800
+                    });
+                });
+            }
         } else {
-            modeToggle.disabled = false;
+            // Utilisateur gratuit - afficher le quota utilisé
+            const quotaUsed = result.dailyQuota || 0;
+            quotaText.innerHTML = `<i class="fas fa-chart-pie"></i> Free quota: ${quotaUsed}/10 per day.`;
+            
+            // Changer la couleur en fonction du quota utilisé
+            if (quotaUsed >= 8) {
+                quotaText.style.color = '#dc2626';
+            } else if (quotaUsed >= 5) {
+                quotaText.style.color = '#f59e0b';
+            } else {
+                quotaText.style.color = '#4CAF50';
+            }
+
+            // Afficher le bouton d'upgrade si le quota est élevé
+            const upgradeText = document.querySelector('.upgrade-text');
+            if (upgradeText) {
+                upgradeText.style.display = quotaUsed >= 7 ? 'block' : 'none';
+            }
+
+            // Si le quota est atteint, désactiver le bouton de téléchargement
+            if (quotaUsed >= 10) {
+                showNotification('Daily quota reached (10/10). Upgrade to Pro for unlimited downloads!', 'error');
+            }
         }
     });
 }
+
+// Appeler cette fonction au chargement
+document.addEventListener('DOMContentLoaded', function() {
+    updateQuotaDisplay();
+    loadHistory();
+    loadHistory();
+});
 
 function loadHistory() {
     chrome.storage.local.get(['downloadHistory'], function(result) {
@@ -356,9 +419,18 @@ chrome.storage.onChanged.addListener(function(changes) {
     }
 });
 
-checkAndResetQuota();
-// Vérifier toutes les minutes
-setInterval(checkAndResetQuota, 60000);
+// Écouter les changements de storage pour mettre à jour l'interface
+chrome.storage.onChanged.addListener(function(changes) {
+    if (changes.dailyQuota) {
+        // updateQuotaDisplay(); // Supprimer ou commenter cette ligne
+    }
+    if (changes.downloadHistory) {
+        loadHistory();
+    }
+});
+
+// checkAndResetQuota(); // Supprimer ou commenter cette ligne
+// setInterval(checkAndResetQuota, 60000); // Supprimer ou commenter cette ligne
 
 function showUserInfo(email) {
     const authModal = document.getElementById('authModal');
@@ -616,37 +688,190 @@ function showGumroadModal() {
 window.addEventListener('message', function(event) {
     if (event.data.purchaseComplete) {
         updateUIForProUser();
-        showNotification('Welcome to Pro! 🎉', 'success');
     }
 });
 
-function updateUIForProUser() {
+function updateUIForProUser(startDate, endDate) {
+    // Masquer les éléments gratuits
     const upgradeText = document.querySelector('.upgrade-text');
-    if (upgradeText) upgradeText.style.display = 'none';
+    if (upgradeText) {
+        upgradeText.style.display = 'none';
+    }
 
     const quotaText = document.querySelector('.quota-text');
-    if (quotaText) quotaText.textContent = 'Pro Account: Unlimited downloads';
+    if (quotaText) {
+        quotaText.innerHTML = '<i class="fas fa-infinity"></i> Pro Account: Unlimited downloads';
+        quotaText.style.color = '#10B981';
+    }
 
+    // Activer les fonctionnalités Pro
     const modeToggle = document.getElementById('modeToggle');
-    if (modeToggle) modeToggle.disabled = false;
+    if (modeToggle) {
+        modeToggle.disabled = false;
+        modeToggle.parentElement.style.opacity = '1';
+    }
+
+    // Ajouter le badge Pro
+    const header = document.querySelector('.header');
+    if (header && !document.querySelector('.pro-badge')) {
+        const proBadge = document.createElement('div');
+        proBadge.className = 'pro-badge';
+        proBadge.innerHTML = '<i class="fas fa-crown"></i> PRO';
+        header.prepend(proBadge);
+    }
+
+    // Ajouter les informations d'abonnement
+    const subscriptionInfo = document.createElement('div');
+    subscriptionInfo.className = 'subscription-info';
+    subscriptionInfo.innerHTML = `
+        <div class="sub-details">
+            <div class="sub-dates">
+                <span><i class="fas fa-calendar-check"></i> Start: ${startDate}</span>
+                <span><i class="fas fa-calendar-times"></i> End: ${endDate}</span>
+            </div>
+            <div class="sub-status">
+                <i class="fas fa-check-circle"></i> Active
+            </div>
+        </div>
+    `;
+
+    // Ajouter les styles pour les nouvelles informations d'abonnement
+    if (!document.querySelector('#pro-styles')) {
+        const style = document.createElement('style');
+        style.id = 'pro-styles';
+        style.textContent = `
+            .pro-badge {
+                background: linear-gradient(135deg, #10B981 0%, #3B82F6 100%);
+                color: white;
+                padding: 4px 12px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: bold;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                animation: slideIn 0.3s ease;
+            }
+            .subscription-info {
+                margin-top: 16px;
+                background: #f8fafc;
+                border-radius: 8px;
+                padding: 12px;
+            }
+            .sub-details {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            .sub-dates {
+                display: flex;
+                justify-content: space-between;
+                font-size: 12px;
+                color: #64748b;
+            }
+            .sub-status {
+                color: #10B981;
+                font-weight: 500;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            @keyframes slideIn {
+                from { transform: translateY(-10px); opacity: 0; }
+                to { transform: translateY(0); opacity: 1; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // Ajouter les informations d'abonnement à l'interface
+    const container = document.querySelector('.container');
+    if (container) {
+        const existingInfo = document.querySelector('.subscription-info');
+        if (existingInfo) {
+            existingInfo.remove();
+        }
+        container.appendChild(subscriptionInfo);
+    }
+
+    // Afficher une notification de bienvenue
+    showNotification('Welcome to Grabbber Pro! Enjoy unlimited downloads!', 'success');
 }
 
 // Fonction pour vérifier le statut de l'abonnement
-function checkSubscriptionStatus() {
-    chrome.storage.local.get(['proStatus'], function(result) {
-        if (result.proStatus) {
-            const subscriptionEndDate = new Date(result.proStatus.endDate);
-            const now = new Date();
-            
-            if (now < subscriptionEndDate) {
-                // Abonnement actif
-                enableProFeatures();
-            } else {
-                // Abonnement expiré
-                disableProFeatures();
-            }
+async function checkSubscriptionStatus() {
+    try {
+        const user = auth.currentUser;
+        if (!user) {
+            disableProFeatures();
+            return;
         }
-    });
+
+        // Vérifier d'abord dans le stockage local
+        const { isPremium, premiumEndDate, lastVerification } = await new Promise(resolve => {
+            chrome.storage.local.get(['isPremium', 'premiumEndDate', 'lastVerification'], resolve);
+        });
+
+        const now = Date.now();
+
+        // Si nous avons vérifié il y a moins d'une heure et que l'abonnement est toujours valide
+        if (lastVerification && now - lastVerification < 3600000 && isPremium && premiumEndDate > now) {
+            enableProFeatures();
+            return;
+        }
+
+        // Vérifier avec Firebase
+        const userDoc = await firebase.firestore().collection('users').doc(user.uid).get();
+        const userData = userDoc.data();
+
+        if (userData && userData.isPremium && userData.premiumEndDate > now) {
+            // Mettre à jour le stockage local
+            chrome.storage.local.set({
+                isPremium: true,
+                premiumStartDate: userData.premiumStartDate,
+                premiumEndDate: userData.premiumEndDate,
+                subscriptionType: userData.subscriptionType,
+                lastVerification: now
+            });
+
+            // Vérifier avec le serveur
+            const response = await fetch('https://grabbber.onrender.com/api/verify-subscription', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${await user.getIdToken()}`
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.valid) {
+                enableProFeatures();
+                updateProBadge(true);
+                updateSubscriptionInfo(
+                    new Date(userData.premiumStartDate).toLocaleDateString(),
+                    new Date(userData.premiumEndDate).toLocaleDateString()
+                );
+            } else {
+                await firebase.firestore().collection('users').doc(user.uid).update({
+                    isPremium: false,
+                    lastVerification: now
+                });
+                disableProFeatures();
+                showNotification('Your premium subscription has expired', 'error');
+            }
+        } else {
+            disableProFeatures();
+            chrome.storage.local.set({
+                isPremium: false,
+                lastVerification: now
+            });
+        }
+    } catch (error) {
+        console.error('Error checking subscription:', error);
+        showNotification('Error checking subscription status', 'error');
+    }
 }
 
 // Activer les fonctionnalités Pro
@@ -747,4 +972,230 @@ function enableGrabberFunctionality() {
             modeToggle.disabled = false;
         }
     });
-} 
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const upgradeLink = document.querySelector('.upgrade-pro-link');
+    if (upgradeLink) {
+        upgradeLink.addEventListener('click', function() {
+            chrome.windows.create({
+                url: chrome.runtime.getURL('payment.html'),
+                type: 'popup',
+                width: 600,
+                height: 800
+            });
+        });
+    }
+});
+
+function updateProStatus() {
+    chrome.storage.local.get(['isPro', 'subscriptionStart', 'subscriptionEnd'], function(result) {
+        const quotaText = document.querySelector('.quota-text');
+        const upgradeLink = document.getElementById('upgradeLink');
+        const activateCodeBtn = document.getElementById('activateCodeBtn');
+        const subscriptionInfo = document.getElementById('subscriptionInfo');
+        const proButtons = document.querySelector('.pro-buttons');
+
+        if (result.isPro) {
+            // Afficher le statut premium
+            quotaText.firstChild.textContent = 'Pro Account: Unlimited downloads';
+            proButtons.style.display = 'none';
+
+            // Calculer les jours restants
+            const endDate = new Date(result.subscriptionEnd);
+            const now = new Date();
+            const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+
+            // Formater les dates
+            const startDate = new Date(result.subscriptionStart).toLocaleDateString();
+            const endDateStr = endDate.toLocaleDateString();
+
+            // Afficher les informations d'abonnement
+            subscriptionInfo.textContent = `Subscribed: ${startDate} - ${daysLeft} days left - Expires: ${endDateStr}`;
+            subscriptionInfo.style.display = 'block';
+
+            // Si l'abonnement a expiré
+            if (daysLeft <= 0) {
+                chrome.storage.local.set({isPro: false}, function() {
+                    updateProStatus(); // Mettre à jour l'interface
+                });
+            }
+        } else {
+            // Afficher le statut gratuit
+            quotaText.innerHTML = '<i class="fas fa-chart-pie"></i> Free quota: 0/10 per day.';
+            proButtons.style.display = 'flex';
+            subscriptionInfo.style.display = 'none';
+        }
+    });
+}
+
+// Gestionnaire pour le bouton d'activation de code
+document.getElementById('activateCodeBtn').addEventListener('click', function() {
+    const modal = document.getElementById('codeModal');
+    modal.style.display = 'block';
+});
+
+// Gestionnaire pour fermer la modale
+document.querySelector('.close-modal').addEventListener('click', function() {
+    document.getElementById('codeModal').style.display = 'none';
+});
+
+// Fermer la modale en cliquant en dehors
+window.addEventListener('click', function(event) {
+    const modal = document.getElementById('codeModal');
+    if (event.target === modal) {
+        modal.style.display = 'none';
+    }
+});
+
+async function activateCode(code) {
+    try {
+        const userEmail = firebase.auth().currentUser.email;
+        if (!userEmail) {
+            throw new Error('Utilisateur non connecté');
+        }
+
+        const codeRef = firebase.firestore().collection('premium_codes').doc(code.toUpperCase());
+        const codeDoc = await codeRef.get();
+
+        if (!codeDoc.exists) {
+            throw new Error('Code invalide');
+        }
+
+        const codeData = codeDoc.data();
+        const now = new Date();
+
+        if (codeData.usedAt) {
+            throw new Error('Code déjà utilisé');
+        }
+
+        if (now > codeData.expiresAt.toDate()) {
+            throw new Error('Code expiré');
+        }
+
+        let expiresAt; // Déclarer la variable ici
+        
+        // Transaction Firestore pour l'activation
+        await firebase.firestore().runTransaction(async (transaction) => {
+            // Mettre à jour le code
+            transaction.update(codeRef, {
+                usedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                usedBy: userEmail,
+                active: false
+            });
+
+            // Mettre à jour le statut premium de l'utilisateur
+            const userRef = firebase.firestore().collection('users').doc(userEmail);
+            expiresAt = new Date(); // Utiliser la variable déclarée plus haut
+            expiresAt.setDate(expiresAt.getDate() + 30); // 30 jours de premium
+
+            transaction.set(userRef, {
+                isPro: true,
+                premiumActivatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                premiumExpiresAt: expiresAt,
+                activationCode: code
+            }, { merge: true });
+        });
+
+        // Mettre à jour le stockage local
+        chrome.storage.local.set({ isPro: true, subscriptionEnd: expiresAt.toISOString() });
+
+        return { success: true, expiresAt: expiresAt.toISOString() };
+    } catch (error) {
+        console.error('Erreur d\'activation:', error);
+        throw error;
+    }
+}
+
+// Fonction pour vérifier le statut premium
+async function checkPremiumStatus() {
+    try {
+        const userEmail = firebase.auth().currentUser.email;
+        if (!userEmail) return false;
+
+        const userDoc = await firebase.firestore().collection('users').doc(userEmail).get();
+        if (!userDoc.exists) return false;
+
+        const userData = userDoc.data();
+        const now = new Date();
+        const expiresAt = userData.premiumExpiresAt?.toDate();
+
+        const isPro = userData.isPro && expiresAt && now < expiresAt;
+
+        // Mettre à jour le stockage local
+        chrome.storage.local.set({
+            isPro: isPro,
+            subscriptionEnd: expiresAt?.toISOString()
+        });
+
+        return isPro;
+    } catch (error) {
+        console.error('Erreur de vérification du statut premium:', error);
+        return false;
+    }
+}
+
+// Gestionnaire pour le bouton de soumission du code
+document.getElementById('submitCode').addEventListener('click', async function() {
+    const codeInput = document.getElementById('premiumCode');
+    const code = codeInput.value.trim();
+
+    if (!code) {
+        showNotification('Please enter a valid code', 'error');
+        return;
+    }
+
+    try {
+        const result = await activateCode(code);
+        showNotification('Premium access activated successfully!');
+        document.getElementById('codeModal').style.display = 'none';
+        codeInput.value = '';
+        updateProStatus();
+    } catch (error) {
+        showNotification(error.message, 'error');
+    }
+});
+
+// Fonction pour gérer le clic sur le toggle
+function handleToggleClick(e) {
+    e.preventDefault();
+    
+    // Show notification with the premium message
+    showNotification('Upgrade to Lifetime Plan to unlock unlimited Grabbber! Get exclusive access to Al agents and download as many videos as you want for life without restrictions !', 'success');
+    
+    // Ouvrir payment.html
+    chrome.windows.create({
+        url: chrome.runtime.getURL('payment.html'),
+        type: 'popup',
+        width: 600,
+        height: 800
+    });
+}
+
+// Call on load and daily
+updateProStatus();
+setInterval(updateProStatus, 86400000);
+
+// Handle refresh message from payment page and quota updates
+chrome.runtime.onMessage.addListener(function(request) {
+    if (request.action === "refreshPopup") {
+        updateProStatus();
+    } else if (request.action === "updateQuota") {
+        updateQuotaDisplay();
+    }
+});
+
+// Ajouter ces fonctions pour gérer dynamiquement le badge Pro
+function updateProBadge(isPro) {
+    const proBadge = document.createElement('div');
+    proBadge.className = 'pro-badge';
+    proBadge.innerHTML = '<i class="fas fa-crown"></i> PRO';
+    document.querySelector('.header').prepend(proBadge);
+}
+
+function updateSubscriptionInfo(startDate, endDate) {
+    const subInfo = document.createElement('div');
+    subInfo.className = 'subscription-info';
+    subInfo.innerHTML = `Subscribed: ${startDate} - Expires: ${endDate}`;
+    document.querySelector('.header').append(subInfo);
+}

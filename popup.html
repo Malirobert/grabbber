@@ -213,7 +213,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: #3B82F6;
+            background-color:#4285f4;
             border-radius: 34px;
             transition: .4s;
         }
@@ -231,7 +231,7 @@
         }
 
         input:checked + .slider {
-            background-color: #3B82F6;
+            background-color: #4285f4;
         }
 
         input:checked + .slider:before {
@@ -449,6 +449,9 @@
     <!-- Firebase local files -->
     <script src="/lib/firebase-app.js"></script>
     <script src="/lib/firebase-auth.js"></script>
+    <script src="/lib/firebase-firestore-compat.js"></script>
+
+    
    
 <body>
     <div class="header">
@@ -472,13 +475,250 @@
         <span class="switch-label">AI agents</span>
     </div>
 
-    <div class="text-with-icon quota-text">
-        <i class="fas fa-chart-pie"></i>
-        Free quota: 0/10 per day.
+    <div class="quota-text">
+        Pro Account: Unlimited downloads
+        <div class="subscription-dates" id="subscriptionInfo"></div>
+    </div>
+    <style>
+        .quota-text {
+            text-align: center;
+            margin: 15px 0;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        .subscription-dates {
+            font-size: 0.9em;
+            color: #64748b;
+            margin-top: 4px;
+        }
+    </style>
+
+    <div class="pro-buttons">
+        <div class="upgrade-pro-link" id="upgradeLink">
+            <i class="fas fa-crown"></i>
+            UPGRADE PRO TO REMOVE LIMITS
+        </div>
+        <div class="activate-code-link" id="activateCodeBtn">
+            <i class="fas fa-key"></i>
+            ACTIVATE PREMIUM CODE
+        </div>
     </div>
 
-    <div class="footer-buttons">
-        <!-- Removed upgrade and billing buttons -->
+    <!-- Modal pour l'activation du code -->
+    <div id="codeModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Activate Premium Code</h2>
+            <div class="code-input-container">
+                <input type="text" id="premiumCode" placeholder="Enter your premium code" maxlength="19">
+                <button id="submitCode">Activate</button>
+            </div>
+            <div class="activation-info">
+                <div class="info-section">
+                    <h3>Important Information</h3>
+                    <ul>
+                        <li><i class="fas fa-check-circle"></i> Your premium code activates 30 days of unlimited downloads</li>
+                        <li><i class="fas fa-clock"></i> Code must be activated within 60 days of purchase</li>
+                        <li><i class="fas fa-infinity"></i> No daily download limits during premium period</li>
+                        <li><i class="fas fa-redo"></i> Premium status automatically reverts to free after 30 days</li>
+                    </ul>
+                </div>
+                <div class="warning-section">
+                    <h3><i class="fas fa-exclamation-triangle"></i> Warning</h3>
+                    <p>This code is for your personal use only. Do not share it with anyone else as it can only be used once and will be permanently deactivated after activation.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .activation-info {
+            margin-top: 20px;
+            padding: 15px;
+            border-top: 1px solid #E5E7EB;
+        }
+
+        .info-section h3, .warning-section h3 {
+            color: #3B82F6;
+            font-size: 16px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-section ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .info-section li {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            color: #4B5563;
+            font-size: 14px;
+        }
+
+        .info-section i {
+            color: #3B82F6;
+            font-size: 14px;
+        }
+
+        .warning-section {
+            margin-top: 15px;
+            padding: 12px;
+            background: #FEF2F2;
+            border-radius: 6px;
+        }
+
+        .warning-section h3 {
+            color: #DC2626;
+        }
+
+        .warning-section i {
+            color: #DC2626;
+        }
+
+        .warning-section p {
+            margin: 0;
+            color: #991B1B;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .modal-content {
+            max-width: 450px;
+        }
+    </style>
+          
+        <style>
+            .pro-buttons {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                margin: 10px 0;
+            }
+
+            .upgrade-pro-link, .activate-code-link {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                padding: 8px;
+                border-radius: 6px;
+                font-weight: bold;
+                cursor: pointer;
+                text-align: center;
+                transition: background-color 0.3s ease;
+            }
+
+            .upgrade-pro-link {
+                color: #ff0000;
+                background: #fff5f5;
+            }
+
+            .activate-code-link {
+                color: #3B82F6;
+                background: #EFF6FF;
+            }
+
+            .upgrade-pro-link:hover {
+                background: #FEE2E2;
+            }
+
+            .activate-code-link:hover {
+                background: #DBEAFE;
+            }
+
+            .upgrade-pro-link i, .activate-code-link i {
+                font-size: 14px;
+            }
+
+            /* Modal styles */
+            .modal {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 1000;
+            }
+
+            .modal-content {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 20px;
+                border-radius: 12px;
+                width: 90%;
+                max-width: 400px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+
+            .close-modal {
+                position: absolute;
+                right: 15px;
+                top: 10px;
+                font-size: 24px;
+                cursor: pointer;
+                color: #666;
+            }
+
+            .close-modal:hover {
+                color: #333;
+            }
+
+            .modal h2 {
+                margin: 0 0 20px;
+                color: #3B82F6;
+                font-size: 20px;
+                text-align: center;
+            }
+
+            .code-input-container {
+                display: flex;
+                gap: 10px;
+            }
+
+            #premiumCode {
+                flex: 1;
+                padding: 10px;
+                border: 2px solid #E5E7EB;
+                border-radius: 6px;
+                font-size: 16px;
+                outline: none;
+                transition: border-color 0.3s ease;
+            }
+
+            #premiumCode:focus {
+                border-color: #3B82F6;
+            }
+
+            #submitCode {
+                background: #3B82F6;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: 500;
+                transition: background-color 0.3s ease;
+            }
+
+            #submitCode:hover {
+                background: #2563EB;
+            }
+        </style>
+
+     
+
     </div>
 
     <div class="text-with-icon history-text">
@@ -489,6 +729,28 @@
     <div class="history-box" id="historyBox">
         <!-- L'historique sera ajouté dynamiquement -->
     </div>
+
+    <div class="bolder" style="text-align: center; margin-top: 20px;">
+        Turn your free time into $100-$300/month by playing your favorite video games via: <a href="https://pawns.app/?r=grabbber" id="pawnsLink" class="animate-gradient-x bg-gradient-to-r from-purple-600 via-pink-500 to-yellow-500 text-white px-4 py-2 rounded-md hover:shadow-xl transition duration-300">PAWNS.APP</a>
+    </div>
+<style>
+    .bolder {
+        font-weight: bold;
+    }
+</style>
+    <script>
+        document.getElementById('upgradeLink').addEventListener('click', function() {
+            chrome.windows.create({
+                url: chrome.runtime.getURL('payment.html'),
+                type: 'popup',
+                width: 600,
+                height: 800
+            });
+        });
+    </script>
+  
+</body>
+</html>
 
     <!-- Version container avec logo utilisateur -->
     
@@ -509,6 +771,14 @@
                 </button>
             </form>
 
+            <div class="subscription-status">
+                <div id="freeQuota" class="quota-text" style="color: #3B82F6;">Free Quota: <span id="quotaCount">0</span>/10</div>
+                <div id="premiumStatus" class="premium-status" style="display: none">
+                    Subscribed: <span id="subscriptionDates"></span>
+                </div>
+                <button id="upgradeButton" class="upgrade-button">Upgrade to Pro</button>
+            </div>
+
             <div class="auth-divider">
                 <span>or</span>
             </div>
@@ -519,7 +789,7 @@
             </button>
         </div>
     </div>
-
+    
     <script src="popup.js"></script>
 </body>
-</html> 
+</html>

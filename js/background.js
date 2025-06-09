@@ -124,6 +124,28 @@ function initGrabber() {
   });
 }
 
+// Vérifier et réinitialiser le quota à minuit
+function checkAndResetQuota() {
+    chrome.storage.local.get(['lastQuotaReset'], function(result) {
+        const now = new Date();
+        const lastReset = result.lastQuotaReset ? new Date(result.lastQuotaReset) : null;
+        
+        if (!lastReset || 
+            now.getDate() !== lastReset.getDate() || 
+            now.getMonth() !== lastReset.getMonth() || 
+            now.getFullYear() !== lastReset.getFullYear()) {
+            
+            chrome.storage.local.set({
+                dailyQuota: 0,
+                lastQuotaReset: now.getTime()
+            });
+        }
+    });
+}
+
+// Vérifier le quota toutes les minutes
+setInterval(checkAndResetQuota, 60000);
+
 // Ajouter la gestion du téléchargement
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'downloadVideo') {
@@ -156,4 +178,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
         });
     }
-}); 
+});
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'updateProStatus') {
+        chrome.storage.local.set({
+            isPro: request.isPro,
+            subscriptionEnd: request.subscriptionEnd
+        });
+    }
+});

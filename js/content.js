@@ -4,8 +4,36 @@ let isSelectionMode = false;
 let wasSelectionModeActive = false;
 let currentSite = '';
 let isUserAuthenticated = false;
+let isPremium = false;
 let downloadStates = {};
 let downloadInProgress = false;  // Nouvelle variable pour suivre l'état global du téléchargement
+
+// Au début du fichier, ajouter la constante pour l'URL du serveur
+const SERVER_URL = 'https://grabbber.onrender.com';
+
+// Vérifier le statut premium
+chrome.storage.local.get(['isPro', 'subscriptionEnd'], function(result) {
+    if (result.isPro && result.subscriptionEnd) {
+        const endDate = new Date(result.subscriptionEnd);
+        const now = new Date();
+        isPremium = now < endDate;
+    }
+});
+
+// Écouter les changements de statut premium
+chrome.storage.onChanged.addListener((changes) => {
+    if (changes.isPro || changes.subscriptionEnd) {
+        chrome.storage.local.get(['isPro', 'subscriptionEnd'], function(result) {
+            if (result.isPro && result.subscriptionEnd) {
+                const endDate = new Date(result.subscriptionEnd);
+                const now = new Date();
+                isPremium = now < endDate;
+            } else {
+                isPremium = false;
+            }
+        });
+    }
+});
 
 // Déterminer le site actuel
 function detectCurrentSite() {
@@ -237,6 +265,11 @@ const styles = `
         background: #16a34a;
         cursor: wait;
     }
+    .download-all-button.disabled {
+    background: #cccccc !important;
+    cursor: not-allowed !important;
+    opacity: 0.7 !important;
+}
     #minimize-panel {
         background: none;
         border: none;
@@ -249,6 +282,12 @@ const styles = `
         letter-spacing: -2px;
         width: 40px;
         text-align: center;
+        opacity: 1;
+        transition: opacity 0.3s ease;
+    }
+    #minimize-panel[disabled] {
+        opacity: 0.5;
+        pointer-events: none;
     }
     #minimize-panel:hover {
         opacity: 0.8;
@@ -444,6 +483,32 @@ const styles = `
     .instagram-grid-highlight:hover::after {
         opacity: 1 !important;
     }
+
+    /* Style pour le bouton Upgrade to Pro */
+    .upgrade-pro-button {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: linear-gradient(45deg, #ff6b6b, #ff8787);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: none;
+        margin: 12px;
+        width: calc(100% - 24px);
+    }
+
+    .upgrade-pro-button:hover {
+        background: linear-gradient(45deg, #ff5252, #ff6b6b);
+        transform: translateY(-1px);
+    }
+
+    .upgrade-pro-button i {
+        font-size: 14px;
+    }
 `;
 
 // Ajouter un style pour l'overlay YouTube
@@ -614,6 +679,10 @@ function toggleSelectionMode(e) {
 // Fonction pour détecter et mettre en surbrillance les vidéos - améliorée pour Instagram
 function detectAndHighlightVideos() {
     currentSite = detectCurrentSite();
+    
+    if (currentSite === 'youtube') {
+        initializeDownloadButton();
+    }
     const siteConfig = platformSelectors[currentSite];
     
     if (currentSite === 'instagram') {
@@ -1010,10 +1079,9 @@ function removeHighlights() {
 
 // Fonction pour afficher le panneau de téléchargement
 function showDownloadPanel(e) {
-    if (e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
+    e.preventDefault();
+    e.stopPropagation();
+    
     const downloadPanel = document.getElementById('download-panel');
     const grabberButton = document.getElementById('grabber-button');
     wasSelectionModeActive = isSelectionMode;
@@ -1040,6 +1108,14 @@ function showDownloadPanel(e) {
     downloadPanel.style.display = 'block';
     grabberButton.style.display = 'none';
 
+    // Force la réinitialisation du bouton Download All
+    const downloadButton = document.querySelector('.download-all-button');
+    if (downloadButton) {
+        downloadInProgress = false;
+        downloadButton.disabled = false;
+        downloadButton.innerHTML = '<i class="fas fa-download"></i> Download All';
+    }
+
     updateDownloadPanel();
 }
 
@@ -1059,14 +1135,14 @@ function updateDownloadPanel() {
                     'ready': 'Ready to download',
                     'downloading': 'Downloading...',
                     'completed': 'Downloaded',
-                    'error': 'Download failed'
+                    'error': 'Failed to download'
                 }[downloadState];
                 
                 const statusClass = {
                     'ready': '',
                     'downloading': 'text-blue-500',
-                    'completed': 'text-green-500',
-                    'error': 'text-red-500'
+                    'completed': '#4CAF50',
+                    'error': '#f44336'
                 }[downloadState];
 
                 const siteConfig = platformSelectors[video.platform];
@@ -1113,41 +1189,50 @@ function updateDownloadPanel() {
     });
 
     document.getElementById('minimize-panel').addEventListener('click', minimizePanel);
-    if (selectedVideos.length > 0 && !downloadInProgress) {
-        document.getElementById('download-all').addEventListener('click', downloadAllVideos);
+    
+    const downloadAllButton = document.getElementById('download-all');
+    if (downloadAllButton) {
+        if (downloadInProgress) {
+            downloadAllButton.disabled = true;
+            downloadAllButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
+        } else {
+            downloadAllButton.disabled = false;
+            downloadAllButton.innerHTML = '<i class="fas fa-download"></i> Download All';
+            // Ajouter l'écouteur d'événement uniquement si le bouton n'est pas en cours de téléchargement
+            downloadAllButton.addEventListener('click', downloadAllVideos);
+        }
     }
 }
 
-// Ajouter ces fonctions pour gérer le quota et l'historique
-function updateQuota() {
-    chrome.storage.local.get(['dailyQuota', 'lastQuotaReset'], function(result) {
-        const now = new Date().getTime();
-        const lastReset = result.lastQuotaReset || 0;
-        const dayInMs = 24 * 60 * 60 * 1000;
+// Fonctions pour gérer le quota et l'historique
 
-        // Réinitialiser le quota si c'est un nouveau jour
-        if (now - lastReset > dayInMs) {
-            chrome.storage.local.set({
-                dailyQuota: 0,
-                lastQuotaReset: now
+async function checkQuota() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['isPro', 'dailyQuota'], function(result) {
+            if (result.isPro) {
+                resolve({ canDownload: true });
+            } else {
+                const currentQuota = result.dailyQuota || 0;
+                resolve({
+                    canDownload: currentQuota < 10,
+                    currentQuota: currentQuota
+                });
+            }
+        });
+    });
+}
+
+async function incrementQuota() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['dailyQuota'], function(result) {
+            const newQuota = (result.dailyQuota || 0) + 1;
+            chrome.storage.local.set({ dailyQuota: newQuota }, function() {
+                resolve(newQuota);
             });
-        }
-
-        const currentQuota = result.dailyQuota || 0;
-        if (currentQuota >= 10) {
-            showNotification('Daily quota reached.');
-            return false;
-        }
-        return true;
+        });
     });
 }
 
-function incrementQuota() {
-    chrome.storage.local.get(['dailyQuota'], function(result) {
-        const newQuota = (result.dailyQuota || 0) + 1;
-        chrome.storage.local.set({ dailyQuota: newQuota });
-    });
-}
 
 function addToHistory(videoData) {
     chrome.storage.local.get(['downloadHistory'], function(result) {
@@ -1155,248 +1240,140 @@ function addToHistory(videoData) {
         history.unshift({
             title: videoData.title,
             thumbnail: videoData.thumbnail,
-            platform: videoData.platform,
+            platform: videoData.platform || 'unknown',
             date: new Date().getTime()
         });
-        // Garder seulement les 50 derniers téléchargements
+        
+        // Limiter à 50 entrées max
         if (history.length > 50) history.pop();
+        
         chrome.storage.local.set({ downloadHistory: history });
     });
 }
 
-// Modifier la fonction downloadAllVideos
-function downloadAllVideos() {
-    if (selectedVideos.length === 0) return;
-    if (downloadInProgress) return;
-
-    chrome.storage.local.get(['dailyQuota'], function(result) {
-        const currentQuota = result.dailyQuota || 0;
-        const remainingQuota = 10 - currentQuota;
-        
-        if (remainingQuota <= 0) {
-            showNotification('Daily quota reached.');
-            return;
-        }
-
-        downloadInProgress = true;
-        localStorage.setItem('downloadInProgress', 'true');
-
-        const videosToDownload = selectedVideos.slice(0, remainingQuota);
-        const downloadButton = document.getElementById('download-all');
-        downloadButton.classList.add('downloading');
-        downloadButton.disabled = true;
-        downloadButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
-        
-        // Mettre à jour l'état des téléchargements
-        videosToDownload.forEach(video => {
-            downloadStates[video.id] = 'downloading';
-        });
-        saveDownloadStates();
-        updateDownloadPanel();
-        
-        let currentIndex = 0;
+async function downloadAllVideos() {
+    const downloadButton = document.querySelector('.download-all-button');
+    const minimizeBtn = document.getElementById('minimize-panel');
+    if (!downloadButton || downloadButton.disabled || downloadInProgress) return;
     
-        function downloadNext() {
-            if (currentIndex >= videosToDownload.length) {
-                downloadInProgress = false;
-                localStorage.setItem('downloadInProgress', 'false');
-                downloadButton.classList.remove('downloading');
-                downloadButton.disabled = false;
-                downloadButton.innerHTML = '<i class="fas fa-check"></i> Downloaded';
-                setTimeout(() => {
-                    downloadButton.innerHTML = '<i class="fas fa-download"></i> Download All';
-                }, 2000);
-                return;
+    // Vérifier le quota avant de commencer
+    const quotaCheck = await checkQuota();
+    if (!quotaCheck.canDownload) {
+        showNotification('Daily quota reached (10/10). Upgrade to Pro for unlimited downloads!', 'error');
+        return;
+    }
+
+    const videos = selectedVideos;
+    if (videos.length === 0) return;
+
+    // Vérifier si le nombre de vidéos dépasse le quota restant pour les utilisateurs gratuits
+    if (!quotaCheck.isPro && (quotaCheck.currentQuota + videos.length) > 10) {
+        const remainingDownloads = 10 - quotaCheck.currentQuota;
+        showNotification(`You can only download ${remainingDownloads} more videos today. Upgrade to Pro for unlimited downloads!`, 'warning');
+        return;
+    }
+    
+    downloadInProgress = true;
+    downloadButton.disabled = true;
+    downloadButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
+    
+    if (minimizeBtn) {
+        minimizeBtn.style.opacity = '0.5';
+        minimizeBtn.style.pointerEvents = 'none';
+    }
+    
+    try {
+        for (let i = 0; i < videos.length; i++) {
+            const video = videos[i];
+            const videoItem = document.querySelector(`[data-video-id="${video.id}"]`)?.closest('.video-item');
+            const statusElement = videoItem?.querySelector('.video-status');
+            
+            // Vérifier à nouveau le quota pour chaque vidéo
+            const currentQuotaCheck = await checkQuota();
+            if (!currentQuotaCheck.canDownload) {
+                showNotification('Daily quota reached. Upgrade to Pro for unlimited downloads!', 'error');
+                break;
             }
             
-            const video = videosToDownload[currentIndex];
-            const cleanTitle = sanitizeFilename(video.title);
+            if (statusElement) {
+                statusElement.textContent = 'Downloading...';
+                statusElement.style.color = '#666';
+            }
             
-            // Configuration spéciale pour Instagram
-            if (video.platform === 'instagram') {
-                const videoId = video.url.includes('/reel/') 
-                    ? video.url.split('/reel/')[1]?.split('/')[0]
-                    : video.url.split('/p/')[1]?.split('/')[0];
-
-                const headers = {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_8 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
-                    'Accept': '*/*',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Origin': 'https://www.instagram.com',
-                    'Referer': video.url,
-                    'X-IG-App-ID': '936619743392459',
-                    'X-Instagram-AJAX': '1',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-IG-WWW-Claim': '0',
-                    'Cookie': document.cookie,
-                    'Sec-Fetch-Site': 'same-origin',
-                    'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Dest': 'empty',
-                    'Connection': 'keep-alive'
-                };
-
-                fetch('http://localhost:5000/download', {
+            try {
+                const response = await fetch(`${SERVER_URL}/download`, {
                     method: 'POST',
-                    headers: headers,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({
                         url: video.url,
-                        videoId: videoId,
-                        platform: 'instagram',
-                        title: cleanTitle,
-                        format: 'mp4',
-                        quality: 'best',
-                        headers: headers,
-                        isReel: video.url.includes('/reel/'),
-                        useProxy: true,
-                        retryCount: 0
-                    })
-                })
-                .then(response => {
-                    if (response.status === 429) {
-                        throw new Error('RATE_LIMIT');
-                    }
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    return response.blob();
-                })
-                .then(blob => {
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    a.download = `${cleanTitle}.mp4`;
-                    document.body.appendChild(a);
-                    a.click();
-                    
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(url);
-                    }, 100);
-
-                    downloadStates[video.id] = 'completed';
-                    saveDownloadStates();
-                    updateDownloadPanel();
-
-                    incrementQuota();
-                    addToHistory(video);
-                    currentIndex++;
-                    setTimeout(downloadNext, 2000);
-                })
-                .catch(error => {
-                    console.error('Download error:', error);
-                    downloadStates[video.id] = 'error';
-                    saveDownloadStates();
-                    updateDownloadPanel();
-                    
-                    if (error.message === 'RATE_LIMIT') {
-                        showNotification('Rate limit reached. Waiting 30 seconds...');
-                        setTimeout(() => {
-                            currentIndex--;
-                            downloadNext();
-                        }, 30000);
-                    } else {
-                        showNotification(`Error downloading: ${cleanTitle}`);
-                        currentIndex++;
-                        setTimeout(downloadNext, 5000);
-                    }
-                });
-            } else {
-                // Code pour les autres plateformes
-                fetch('http://localhost:5000/download', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
-                    },
-                    body: JSON.stringify({ 
-                        url: video.url,
+                        id: video.id,
                         platform: video.platform,
-                        title: cleanTitle,
-                        format: 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best',
-                        options: {
-                            ytdlpArgs: [
-                                '--format', 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best',
-                                '--extractor-args', 'youtube:player_client=web',
-                                '--no-check-certificates',
-                                '--restrict-filenames'
-                            ],
-                            noPlaylist: true,
-                            maxRetries: 5,
-                            socketTimeout: 30,
-                            forceIpv4: true,
-                            preferFreeFormats: true,
-                            addMetadata: true,
-                            concurrent_fragment_downloads: 1,
-                            throttledRate: 100000,
-                            downloadRetries: 5,
-                            retryInterval: 5,
-                            forceFormat: 'mp4',
-                            headers: {
-                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-                                'Accept': '*/*',
-                                'Accept-Language': 'en-US,en;q=0.9',
-                                'Connection': 'keep-alive'
-                            }
-                        }
+                        title: sanitizeFilename(video.title)
                     })
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        if (response.status === 429) {
-                            throw new Error('RATE_LIMIT');
-                        }
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.blob();
-                })
-                .then(blob => {
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    a.download = `${cleanTitle}.mp4`;
-                    document.body.appendChild(a);
-                    a.click();
-                    
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(url);
-                    }, 10000);
-            
-                    downloadStates[video.id] = 'completed';
-                    saveDownloadStates();
-                    updateDownloadPanel();
-
-                    incrementQuota();
-                    addToHistory(video);
-                    currentIndex++;
-                    setTimeout(downloadNext, 2000);
-                })
-                .catch(error => {
-                    console.error('Download error:', error);
-                    downloadStates[video.id] = 'error';
-                    saveDownloadStates();
-                    updateDownloadPanel();
-                    
-                    if (error.message === 'RATE_LIMIT') {
-                        showNotification('Rate limit reached. Waiting 30 seconds...');
-                        setTimeout(() => {
-                            currentIndex--;
-                            downloadNext();
-                        }, 30000);
-                    } else {
-                        showNotification(`Error downloading: ${cleanTitle}. Retrying in 10 seconds...`);
-                        setTimeout(() => {
-                            currentIndex--;
-                            downloadNext();
-                        }, 10000);
-                    }
                 });
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `${sanitizeFilename(video.title)}.mp4`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                // Incrémenter le quota après un téléchargement réussi
+                const proStatus = await new Promise(resolve => {
+                    chrome.storage.local.get(['isPro'], result => resolve(result.isPro));
+                });
+                if (!proStatus) {
+                    await incrementQuota();
+                    // Forcer la mise à jour de l'affichage du quota
+                    chrome.runtime.sendMessage({ action: 'updateQuota' });
+                }
+
+                if (statusElement) {
+                    statusElement.textContent = 'Downloaded';
+                    statusElement.style.color = '#4CAF50';
+                }
+                addToHistory(video);
+                showNotification(`Downloaded: ${video.title}`, 'success');
+            } catch (error) {
+                console.error(`Error downloading ${video.title}:`, error);
+                if (statusElement) {
+                    statusElement.textContent = 'Failed to download';
+                    statusElement.style.color = '#f44336';
+                }
+                showNotification(`Error downloading: ${video.title}`, 'error');
             }
+            
+            const currentButton = document.querySelector('.download-all-button');
+            if (currentButton) {
+                currentButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
+                currentButton.disabled = true;
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
-    
-        downloadNext();
-    });
+    } finally {
+        downloadInProgress = false;
+        const finalButton = document.querySelector('.download-all-button');
+        if (finalButton) {
+            finalButton.disabled = false;
+            finalButton.innerHTML = '<i class="fas fa-download"></i> Download All';
+            showNotification('All downloads completed', 'success');
+        }
+        
+        if (minimizeBtn) {
+            minimizeBtn.style.opacity = '1';
+            minimizeBtn.style.pointerEvents = 'auto';
+        }
+    }
 }
 
 // Fonction pour nettoyer les noms de fichiers
@@ -1485,6 +1462,7 @@ function deselectVideo(element) {
 
 // Fonction pour minimiser le panneau
 function minimizePanel() {
+    if (downloadInProgress) return; // Empêche la minimisation pendant le téléchargement
     const downloadPanel = document.getElementById('download-panel');
     const grabberButton = document.getElementById('grabber-button');
     const rect = downloadPanel.getBoundingClientRect();
@@ -1497,6 +1475,7 @@ function minimizePanel() {
     
     downloadPanel.style.display = 'none';
     grabberButton.style.display = 'flex';
+    wasSelectionModeActive = isSelectionMode;
     
     // Sauvegarder l'état
     localStorage.setItem('wasMinimized', 'true');
@@ -1709,6 +1688,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     if (changes.userInfo) {
         updateAuthenticationState(!!changes.userInfo.newValue);
     }
+
 });
 
 // Charger l'état des téléchargements au démarrage
@@ -1740,5 +1720,111 @@ document.addEventListener('DOMContentLoaded', () => {
             grabberButton.style.left = `${position.left}px`;
         }
     }
+
+    // Vérifier le statut premium et les limites
+    chrome.storage.local.get(['isPro', 'subscriptionEnd', 'dailyQuota'], function(result) {
+        if (result.isPro && result.subscriptionEnd) {
+            const endDate = new Date(result.subscriptionEnd);
+            const now = new Date();
+            isPremium = now < endDate;
+        }
+
+        // Mettre à jour l'interface en fonction du statut
+        if (!isPremium && result.dailyQuota >= 10) {
+            const downloadButton = document.querySelector('.download-all-button');
+            if (downloadButton) {
+                downloadButton.disabled = true;
+                downloadButton.classList.add('disabled');
+                downloadButton.title = 'Daily download limit reached. Upgrade to Premium for unlimited downloads!';
+            }
+        }
+    });
+});
+
+// Fonction pour vérifier et mettre à jour le quota
+function checkAndUpdateQuota(callback) {
+    if (isPremium) {
+        // Les utilisateurs premium n'ont pas de limite
+        callback(true);
+        return;
+    }
+
+    chrome.storage.local.get(['dailyQuota', 'lastQuotaReset'], function(result) {
+        const now = new Date();
+        const lastReset = result.lastQuotaReset ? new Date(result.lastQuotaReset) : null;
+        const quota = result.dailyQuota || 0;
+
+        // Vérifier si c'est un nouveau jour
+        if (!lastReset || 
+            now.getDate() !== lastReset.getDate() || 
+            now.getMonth() !== lastReset.getMonth() || 
+            now.getFullYear() !== lastReset.getFullYear()) {
+            
+            // Réinitialiser le quota
+            chrome.storage.local.set({
+                dailyQuota: 1,
+                lastQuotaReset: now.getTime()
+            }, () => callback(true));
+        } else if (quota >= 10) {
+            // Limite atteinte
+            callback(false);
+        } else {
+            // Incrémenter le quota
+            chrome.storage.local.set({
+                dailyQuota: quota + 1
+            }, () => callback(true));
+        }
+    });
+}
+
+// Fonction pour réinitialiser l'état du bouton de téléchargement
+function resetDownloadButtonState() {
+    const downloadButton = document.querySelector('.download-all-button');
+    if (downloadButton) {
+        downloadButton.disabled = false;
+        downloadButton.innerHTML = '<i class="fas fa-download"></i> Download All';
+        downloadInProgress = false;
+
+        // Vérifier les limites de téléchargement pour les utilisateurs non premium
+        if (!isPremium) {
+            chrome.storage.local.get(['dailyQuota'], function(result) {
+                const quota = result.dailyQuota || 0;
+                if (quota >= 10) {
+                    downloadButton.disabled = true;
+                    downloadButton.classList.add('disabled');
+                    downloadButton.title = 'Daily download limit reached. Upgrade to Premium for unlimited downloads!';
+                }
+            });
+        }
+    }
+}
+
+// Ajouter un observateur pour le bouton de téléchargement
+function initializeDownloadButton() {
+    const downloadButton = document.querySelector('.download-all-button');
+    if (downloadButton) {
+        if (downloadButton.innerHTML.includes('Downloading...')) {
+            resetDownloadButtonState();
+        }
+
+        // Ajouter le gestionnaire de clic
+        downloadButton.addEventListener('click', function(e) {
+            if (!isPremium) {
+                // Vérifier le quota avant de télécharger
+                checkAndUpdateQuota((canDownload) => {
+                    if (!canDownload) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        showNotification('Daily download limit reached. Upgrade to Premium for unlimited downloads!', 'error');
+                    }
+                });
+            }
+        });
+    }
+}
+
+// Observer le bouton de téléchargement
+document.addEventListener('DOMContentLoaded', () => {
+    initializeDownloadButton();
 });
 

@@ -182,14 +182,20 @@ async function downloadWithYtDlp(video) {
     try {
         statusText.textContent = 'Starting download...';
         progressBar.style.width = '0%';
-        
-        // Faire la requête avec responseType 'blob'
-        const response = await fetch('http://localhost:5000/download', {
+        progressBar.style.backgroundColor = '#3B82F6'; // blue
+
+        const response = await fetch('https://grabbber.onrender.com/download', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ url: video.url, id: video.id })
+            body: JSON.stringify({
+                url: video.url,
+                id: video.id,
+                platform: getPlatformFromUrl(video.url),
+                title: video.title
+            }),
+            timeout: 300000 // 5 minutes timeout
         });
 
         if (!response.ok) {
@@ -221,6 +227,7 @@ async function downloadWithYtDlp(video) {
         window.URL.revokeObjectURL(downloadUrl);
         
         progressBar.style.width = '100%';
+        progressBar.style.backgroundColor = '#10B981'; // green
         statusText.textContent = 'Download complete';
         showNotification(`Downloaded: ${video.title}`, 'success');
         return true;
@@ -228,10 +235,19 @@ async function downloadWithYtDlp(video) {
     } catch (error) {
         console.error(`Error downloading ${video.title}:`, error);
         statusText.textContent = 'Download failed';
-        progressBar.style.backgroundColor = '#EF4444';
+        progressBar.style.backgroundColor = '#EF4444'; // red
         showNotification(`Error downloading ${video.title}: ${error.message}`, 'error');
         return false;
     }
+}
+
+function getPlatformFromUrl(url) {
+    if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
+    if (url.includes('pornhub.com')) return 'pornhub';
+    if (url.includes('xvideos.com')) return 'xvideos';
+    if (url.includes('tiktok.com')) return 'tiktok';
+    if (url.includes('instagram.com')) return 'instagram';
+    return 'other';
 }
         
 function handleVideoClick(e) {
